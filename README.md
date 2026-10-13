@@ -46,8 +46,9 @@ The installer:
 2. Copies the launcher to `/opt/bitedj-launcher` and adds `/usr/local/bin/bitedj-launcher`, which restarts the launcher if it ever crashes.
 3. Creates the **Bite Launcher** shortcut on the desktop (`~/Desktop`) and in the app menu (**Sound & Video**), marked trusted so double-clicking launches it.
 4. Adds the launcher settings to `/etc/djrig.conf`.
-5. In `~/.config/labwc/autostart`, comments out `djrig-launch` (which started BiteDJ straight away), adds a black `swaybg` background and starts `bitedj-launcher`. Both are skipped while autostart is off (see below). A backup is saved as `autostart.pre-launcher`.
-6. Hides the rainbow boot screen (see below).
+5. On the full Pi desktop, adds **Ctrl+Alt+D** to `~/.config/labwc/rc.xml` (see below).
+6. In `~/.config/labwc/autostart`, comments out `djrig-launch` (which started BiteDJ straight away), adds a black `swaybg` background and starts `bitedj-launcher`. Both are skipped while autostart is off (see below). A backup is saved as `autostart.pre-launcher`.
+7. Hides the rainbow boot screen (see below).
 
 To undo everything, run `./uninstall.sh`. It also brings the rainbow screen back; add `--keep-rainbow-off` to leave it hidden.
 
@@ -68,12 +69,14 @@ Switching uses `bite-mode` from [BiteDJ-On-Off-Macro-with-FLX4](https://github.c
 | From | To | How |
 |---|---|---|
 | Bite Launcher | Pi desktop | Tap the clock, then **Switch to Pi Desktop** |
-| Bite Launcher | Pi desktop | **Ctrl+Alt+D** on a keyboard |
+| Either | The other | **Ctrl+Alt+D** on a keyboard (same as the FLX4 hold) |
 | Either | The other | Hold **both 4 BEAT/EXIT** buttons on the FLX4 for 8 seconds |
 | Pi desktop | Bite Launcher | Double-click the **Bite Launcher** desktop icon, or open it from the app menu |
 | Either | Either | Over SSH: `~/bin/bite-mode desktop`, `~/bin/bite-mode launcher` or `~/bin/bite-mode status` |
 
 Going to the desktop closes the launcher and BiteDJ (BiteDJ gets 15 seconds to save and quit), then brings back the taskbar and desktop icons. Going back to the launcher stops the taskbar and desktop and opens the launcher full screen on black. The Pi remembers the last mode across reboots. Switching to the desktop (Ctrl+Alt+D, **Switch to Pi Desktop** or the FLX4 hold) turns the launcher's autostart off. Switching back (the **Bite Launcher** icon or the FLX4 hold) turns it on again. All of them use one marker file, `~/.config/bite-launcher/autostart-off`: when it exists, labwc autostart skips the launcher and its black backdrop.
+
+**Ctrl+Alt+D** works on both screens. On the Pi desktop the installer adds it as a labwc key binding in `~/.config/labwc/rc.xml`. It runs `bite-launcher-open toggle`: if the launcher is running, autostart goes off and the Pi desktop comes back; if not, autostart goes on and the launcher starts. That's the same as the FLX4 hold. The Pi desktop runs labwc in merge mode, so the Pi's own shortcuts are kept ([labwc docs](https://labwc.github.io/labwc-config.5.html)). A backup is saved as `rc.xml.pre-bite-launcher`, and uninstall removes the binding.
 
 Without `bite-mode`, Ctrl+Alt+D still turns autostart off. It stops the wrapper first (so nothing restarts the launcher), then the black backdrop, then closes the launcher, leaving the Pi desktop that was running underneath. The **Bite Launcher** icon turns autostart on and starts the wrapper, which opens the launcher. On the Lite kiosk image, where there's no desktop, it shows "No Pi desktop to switch to" instead.
 
@@ -114,7 +117,7 @@ It adds `python3-pyqt6` to the base packages, puts the launcher, icon and shortc
 - **While BiteDJ runs,** the launcher stays behind it, stops its animation and network checks, and only does a light check every 1.5 s to see whether BiteDJ is still running, so it uses almost no CPU. When BiteDJ quits, the launcher screen is already there underneath, with no flash of the desktop.
 - **If BiteDJ closes within 20 seconds with an error,** an orange note says so and Launch stays available.
 - **BiteDJ started some other way** (the FLX4 hold-button macro, or SSH) is detected, and the launcher stays out of the way. The launcher, the hold macro and `bite-mode` all use `~/bitedj/build/mixxx`, so they always agree on whether BiteDJ is running.
-- **Touch** works as mouse clicks. **Enter or Space** presses Launch. **Ctrl+Alt+D** switches to the Pi desktop. **Ctrl+Alt+Q** quits the launcher (the wrapper restarts it).
+- **Touch** works as mouse clicks. **Enter or Space** presses Launch. **Ctrl+Alt+D** switches between the launcher and the Pi desktop. **Ctrl+Alt+Q** quits the launcher (the wrapper restarts it).
 - **Fullscreen:** if `~/.config/labwc/rc.xml` has the kiosk rule that makes every window fullscreen, the launcher leaves it to that rule (asking again would switch it back out). Otherwise, as on the regular Pi desktop, it goes fullscreen by itself.
 
 ## Testing on a PC

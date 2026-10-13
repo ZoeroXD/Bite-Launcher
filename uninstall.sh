@@ -16,6 +16,11 @@ sudo rm -rf /opt/bitedj-launcher /usr/local/bin/bitedj-launcher /usr/local/bin/b
 DESKTOP_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
 rm -f "$DESKTOP_DIR/bite-launcher.desktop" "$HOME/Desktop/bite-launcher.desktop"
 rm -rf "$HOME/.config/bite-launcher"
+RCXML="$HOME/.config/labwc/rc.xml"
+if [ -f "$RCXML" ] && grep -q "bite-launcher-open toggle" "$RCXML"; then
+  sed -i '/bite-launcher-open toggle/d' "$RCXML"
+  pkill -HUP -u "$(id -u)" -x labwc 2>/dev/null || true
+fi
 
 if [ "$KEEP_OFF" = 0 ]; then
   for CONFIG in /boot/firmware/config.txt /boot/config.txt; do

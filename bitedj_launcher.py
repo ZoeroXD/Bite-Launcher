@@ -514,7 +514,7 @@ class Desktop(QWidget):
         # No bite-mode: stop the wrapper first (it would restart us), the black backdrop, then quit.
         # The Pi desktop is still running underneath, so it's what's left on screen.
         QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "/usr/local/bin/bitedj-launcher"])
-        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "swaybg -c #000000"])
+        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "(^|/)swaybg -c #000000"])
         QApplication.quit()
 
     def launch(self):

@@ -47,6 +47,27 @@ OFF='"$HOME/.config/bite-launcher/autostart-off"'
   echo "[ -e $OFF ] || /usr/local/bin/bitedj-launcher &   # bitedj-launcher"
 } > "$AUTOSTART.new" && mv "$AUTOSTART.new" "$AUTOSTART"
 
+# Ctrl+Alt+D everywhere (launcher or Pi desktop) toggles like the FLX4 4 BEAT/EXIT hold.
+# Only on the full Pi desktop: it runs labwc in merge mode, so the Pi's own shortcuts are kept.
+RCXML="$HOME/.config/labwc/rc.xml"
+KEYBIND='<keybind key="C-A-d"><action name="Execute" command="/usr/local/bin/bite-launcher-open toggle"/></keybind>'
+if [ -x /usr/bin/wf-panel-pi ] && ! grep -q "bite-launcher-open toggle" "$RCXML" 2>/dev/null; then
+  echo ">> Adding Ctrl+Alt+D to labwc"
+  if [ ! -s "$RCXML" ]; then
+    printf '<?xml version="1.0"?>\n<labwc_config>\n  <keyboard>\n    %s\n  </keyboard>\n</labwc_config>\n' "$KEYBIND" > "$RCXML"
+  else
+    cp "$RCXML" "$RCXML.pre-bite-launcher"
+    if grep -q '<keyboard>' "$RCXML"; then
+      sed -i "0,/<keyboard>/s|<keyboard>|<keyboard>\n    $KEYBIND|" "$RCXML"
+    elif grep -q '<keyboard */>' "$RCXML"; then
+      sed -i "0,/<keyboard *\/>/s|<keyboard */>|<keyboard>\n    $KEYBIND\n  </keyboard>|" "$RCXML"
+    else
+      sed -i -E "s#</(labwc_config|openbox_config)>#  <keyboard>\n    $KEYBIND\n  </keyboard>\n</\1>#" "$RCXML"
+    fi
+  fi
+  pkill -HUP -u "$(id -u)" -x labwc 2>/dev/null || true    # reload labwc settings now
+fi
+
 # The rainbow square at power-on is the GPU firmware's splash screen; disable_splash=1 hides it.
 # It's only a picture: hiding it skips no hardware checks and doesn't slow or change booting.
 echo ">> Rainbow boot screen"
