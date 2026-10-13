@@ -58,6 +58,11 @@ def norm(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
+# Present = don't start the Bite Launcher at login (set by Ctrl+Alt+D / bite-mode desktop,
+# cleared by the Bite Launcher shortcut / bite-mode launcher). Checked by labwc autostart only.
+AUTOSTART_OFF = os.path.expanduser("~/.config/bite-launcher/autostart-off")
+
+
 def load_conf(path=CONF_FILE):
     conf = {}
     try:
@@ -484,19 +489,33 @@ class Desktop(QWidget):
         return None
 
     def switch_to_desktop(self):
+        """Ctrl+Alt+D or the tray button: autostart off, close the launcher, back to the Pi desktop.
+
+        Same as holding both 4 BEAT/EXIT on the FLX4. The Bite Launcher shortcut turns autostart back on,
+        so the Pi boots into whichever mode was used last.
+        """
         cmd = self.bite_mode_cmd()
         self.net_open = False
-        if not cmd:
-            self.message = "Mode switch not installed: install BiteDJ-On-Off-Macro-with-FLX4"
+        # Without bite-mode the desktop must already be running underneath (not on the Lite kiosk image)
+        if not cmd and QProcess.execute("pgrep", ["-u", str(os.getuid()), "-x", "wf-panel-pi"]) != 0:
+            self.message = "No Pi desktop to switch to"
             self.update()
             return
+        try:
+            os.makedirs(os.path.dirname(AUTOSTART_OFF), exist_ok=True)
+            open(AUTOSTART_OFF, "w").close()
+        except OSError:
+            pass
         self.switching = True
         self.update()
-        # Detached: bite-mode closes this launcher as part of the switch
-        if not QProcess.startDetached(cmd, ["desktop"]):
-            self.switching = False
-            self.message = "Couldn't start bite-mode"
-        self.update()
+        # Detached: bite-mode stops the wrapper, then this launcher, then brings back the desktop
+        if cmd and QProcess.startDetached(cmd, ["desktop"]):
+            return
+        # No bite-mode: stop the wrapper first (it would restart us), the black backdrop, then quit.
+        # The Pi desktop is still running underneath, so it's what's left on screen.
+        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "/usr/local/bin/bitedj-launcher"])
+        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "swaybg -c #000000"])
+        QApplication.quit()
 
     def launch(self):
         if self.state == RUNNING or self.proc is not None:

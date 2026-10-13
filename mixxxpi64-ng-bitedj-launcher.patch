@@ -48,19 +48,20 @@ index b8f8367..cfaeae0 100644
 +#/usr/local/bin/djrig-launch &
 diff --git a/stage-mixxx/03-kiosk/files/bite-launcher-open b/stage-mixxx/03-kiosk/files/bite-launcher-open
 new file mode 100755
-index 0000000..63a4cdc
+index 0000000..08f21a0
 --- /dev/null
 +++ b/stage-mixxx/03-kiosk/files/bite-launcher-open
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,11 @@
 +#!/bin/sh
-+# Opens the Bite Launcher from the "Bite Launcher" desktop/menu shortcut.
-+# With the FLX4 macro's bite-mode installed, this is a full switch back to launcher mode
-+# (taskbar and desktop stopped, black backdrop, launcher full screen).
++# Bite Launcher desktop/menu shortcut: turn autostart back on, then switch to the Bite Launcher.
++# With the FLX4 macro's bite-mode: full switch (taskbar and desktop stopped, black backdrop).
++# Without it: start the wrapper, which opens the launcher and keeps it running.
++rm -f "$HOME/.config/bite-launcher/autostart-off"
 +pgrep -u "$(id -u)" -f bitedj_launcher.py >/dev/null && exit 0     # already on screen
 +for m in "$HOME/bin/bite-mode" /usr/local/bin/bite-mode; do
 +  [ -x "$m" ] && exec "$m" launcher
 +done
-+# No bite-mode: just start the launcher
++pgrep -u "$(id -u)" -f 'swaybg -c #000000' >/dev/null || setsid -f swaybg -c '#000000' >/dev/null 2>&1 </dev/null
 +exec setsid -f /usr/local/bin/bitedj-launcher >/dev/null 2>&1 </dev/null
 diff --git a/stage-mixxx/03-kiosk/files/bite-launcher.desktop b/stage-mixxx/03-kiosk/files/bite-launcher.desktop
 new file mode 100644
@@ -345,10 +346,10 @@ index 0000000..47d47ef
 +done
 diff --git a/stage-mixxx/03-kiosk/files/bitedj_launcher.py b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
 new file mode 100755
-index 0000000..15be7c4
+index 0000000..270bff6
 --- /dev/null
 +++ b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
-@@ -0,0 +1,910 @@
+@@ -0,0 +1,929 @@
 +#!/usr/bin/env python3
 +"""BiteDJ Launcher - a minimal, black, touch-first home screen for the Raspberry Pi DJ rig.
 +
@@ -407,6 +408,11 @@ index 0000000..15be7c4
 +
 +def norm(s):
 +    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
++
++
++# Present = don't start the Bite Launcher at login (set by Ctrl+Alt+D / bite-mode desktop,
++# cleared by the Bite Launcher shortcut / bite-mode launcher). Checked by labwc autostart only.
++AUTOSTART_OFF = os.path.expanduser("~/.config/bite-launcher/autostart-off")
 +
 +
 +def load_conf(path=CONF_FILE):
@@ -835,19 +841,33 @@ index 0000000..15be7c4
 +        return None
 +
 +    def switch_to_desktop(self):
++        """Ctrl+Alt+D or the tray button: autostart off, close the launcher, back to the Pi desktop.
++
++        Same as holding both 4 BEAT/EXIT on the FLX4. The Bite Launcher shortcut turns autostart back on,
++        so the Pi boots into whichever mode was used last.
++        """
 +        cmd = self.bite_mode_cmd()
 +        self.net_open = False
-+        if not cmd:
-+            self.message = "Mode switch not installed: install BiteDJ-On-Off-Macro-with-FLX4"
++        # Without bite-mode the desktop must already be running underneath (not on the Lite kiosk image)
++        if not cmd and QProcess.execute("pgrep", ["-u", str(os.getuid()), "-x", "wf-panel-pi"]) != 0:
++            self.message = "No Pi desktop to switch to"
 +            self.update()
 +            return
++        try:
++            os.makedirs(os.path.dirname(AUTOSTART_OFF), exist_ok=True)
++            open(AUTOSTART_OFF, "w").close()
++        except OSError:
++            pass
 +        self.switching = True
 +        self.update()
-+        # Detached: bite-mode closes this launcher as part of the switch
-+        if not QProcess.startDetached(cmd, ["desktop"]):
-+            self.switching = False
-+            self.message = "Couldn't start bite-mode"
-+        self.update()
++        # Detached: bite-mode stops the wrapper, then this launcher, then brings back the desktop
++        if cmd and QProcess.startDetached(cmd, ["desktop"]):
++            return
++        # No bite-mode: stop the wrapper first (it would restart us), the black backdrop, then quit.
++        # The Pi desktop is still running underneath, so it's what's left on screen.
++        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "/usr/local/bin/bitedj-launcher"])
++        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "swaybg -c #000000"])
++        QApplication.quit()
 +
 +    def launch(self):
 +        if self.state == RUNNING or self.proc is not None:

@@ -38,11 +38,14 @@ touch "$AUTOSTART"
 [ -f "$AUTOSTART.pre-launcher" ] || cp "$AUTOSTART" "$AUTOSTART.pre-launcher"
 # The launcher replaces djrig-launch, which started BiteDJ without waiting for you
 sed -i 's|^\s*/usr/local/bin/djrig-launch.*|# /usr/local/bin/djrig-launch \&   # replaced by bitedj-launcher|' "$AUTOSTART"
-if ! grep -q bitedj-launcher "$AUTOSTART"; then
-  # Black background first so nothing but black is ever visible between boot and the launcher
-  sed -i '1i swaybg -c "#000000" &   # bitedj-launcher: black backdrop' "$AUTOSTART"
-  echo '/usr/local/bin/bitedj-launcher &   # bitedj-launcher' >> "$AUTOSTART"
-fi
+# Both lines skip when ~/.config/bite-launcher/autostart-off exists (set by Ctrl+Alt+D or the FLX4 macro,
+# cleared by the Bite Launcher shortcut), so the Pi boots into whichever mode was used last.
+sed -i '/# bitedj-launcher/d' "$AUTOSTART"      # replace lines from an older install
+OFF='"$HOME/.config/bite-launcher/autostart-off"'
+{ echo "[ -e $OFF ] || swaybg -c \"#000000\" &   # bitedj-launcher: black backdrop"
+  cat "$AUTOSTART"
+  echo "[ -e $OFF ] || /usr/local/bin/bitedj-launcher &   # bitedj-launcher"
+} > "$AUTOSTART.new" && mv "$AUTOSTART.new" "$AUTOSTART"
 
 # The rainbow square at power-on is the GPU firmware's splash screen; disable_splash=1 hides it.
 # It's only a picture: hiding it skips no hardware checks and doesn't slow or change booting.

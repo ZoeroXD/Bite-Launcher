@@ -46,7 +46,7 @@ The installer:
 2. Copies the launcher to `/opt/bitedj-launcher` and adds `/usr/local/bin/bitedj-launcher`, which restarts the launcher if it ever crashes.
 3. Creates the **Bite Launcher** shortcut on the desktop (`~/Desktop`) and in the app menu (**Sound & Video**), marked trusted so double-clicking launches it.
 4. Adds the launcher settings to `/etc/djrig.conf`.
-5. In `~/.config/labwc/autostart`, comments out `djrig-launch` (which started BiteDJ straight away), adds a black `swaybg` background and starts `bitedj-launcher`. A backup is saved as `autostart.pre-launcher`.
+5. In `~/.config/labwc/autostart`, comments out `djrig-launch` (which started BiteDJ straight away), adds a black `swaybg` background and starts `bitedj-launcher`. Both are skipped while autostart is off (see below). A backup is saved as `autostart.pre-launcher`.
 6. Hides the rainbow boot screen (see below).
 
 To undo everything, run `./uninstall.sh`. It also brings the rainbow screen back; add `--keep-rainbow-off` to leave it hidden.
@@ -73,13 +73,13 @@ Switching uses `bite-mode` from [BiteDJ-On-Off-Macro-with-FLX4](https://github.c
 | Pi desktop | Bite Launcher | Double-click the **Bite Launcher** desktop icon, or open it from the app menu |
 | Either | Either | Over SSH: `~/bin/bite-mode desktop`, `~/bin/bite-mode launcher` or `~/bin/bite-mode status` |
 
-Going to the desktop closes the launcher and BiteDJ (BiteDJ gets 15 seconds to save and quit), then brings back the taskbar and desktop icons. Going back to the launcher stops the taskbar and desktop and opens the launcher full screen on black. The Pi always starts in launcher mode at boot.
+Going to the desktop closes the launcher and BiteDJ (BiteDJ gets 15 seconds to save and quit), then brings back the taskbar and desktop icons. Going back to the launcher stops the taskbar and desktop and opens the launcher full screen on black. The Pi remembers the last mode across reboots. Switching to the desktop (Ctrl+Alt+D, **Switch to Pi Desktop** or the FLX4 hold) turns the launcher's autostart off. Switching back (the **Bite Launcher** icon or the FLX4 hold) turns it on again. All of them use one marker file, `~/.config/bite-launcher/autostart-off`: when it exists, labwc autostart skips the launcher and its black backdrop.
 
-If `bite-mode` isn't installed, **Switch to Pi Desktop** shows a short note saying so, and the **Bite Launcher** icon just opens the launcher.
+Without `bite-mode`, Ctrl+Alt+D still turns autostart off. It stops the wrapper first (so nothing restarts the launcher), then the black backdrop, then closes the launcher, leaving the Pi desktop that was running underneath. The **Bite Launcher** icon turns autostart on and starts the wrapper, which opens the launcher. On the Lite kiosk image, where there's no desktop, it shows "No Pi desktop to switch to" instead.
 
 ## Bite Launcher shortcut
 
-`bite-launcher.desktop` shows as **Bite Launcher** with the striped-fin icon, on the desktop and in the app menu. It runs `bite-launcher-open`, which switches back to launcher mode through `bite-mode` when it's installed, or simply opens the launcher when it isn't. Only one copy runs at a time, so opening it while the launcher is already on screen does nothing.
+`bite-launcher.desktop` shows as **Bite Launcher** with the striped-fin icon, on the desktop and in the app menu. It runs `bite-launcher-open`, which turns autostart back on and switches back to launcher mode through `bite-mode` when it's installed, or simply opens the launcher when it isn't. Only one copy runs at a time, so opening it while the launcher is already on screen does nothing.
 
 If double-clicking the desktop icon asks what to do with the file, choose **Execute**. This only happens when the installer couldn't mark it trusted, for example when it was installed over SSH before the desktop had started. Running `./install.sh` again from a terminal on the desktop fixes it.
 

@@ -1,10 +1,11 @@
 #!/bin/sh
-# Opens the Bite Launcher from the "Bite Launcher" desktop/menu shortcut.
-# With the FLX4 macro's bite-mode installed, this is a full switch back to launcher mode
-# (taskbar and desktop stopped, black backdrop, launcher full screen).
+# Bite Launcher desktop/menu shortcut: turn autostart back on, then switch to the Bite Launcher.
+# With the FLX4 macro's bite-mode: full switch (taskbar and desktop stopped, black backdrop).
+# Without it: start the wrapper, which opens the launcher and keeps it running.
+rm -f "$HOME/.config/bite-launcher/autostart-off"
 pgrep -u "$(id -u)" -f bitedj_launcher.py >/dev/null && exit 0     # already on screen
 for m in "$HOME/bin/bite-mode" /usr/local/bin/bite-mode; do
   [ -x "$m" ] && exec "$m" launcher
 done
-# No bite-mode: just start the launcher
+pgrep -u "$(id -u)" -f 'swaybg -c #000000' >/dev/null || setsid -f swaybg -c '#000000' >/dev/null 2>&1 </dev/null
 exec setsid -f /usr/local/bin/bitedj-launcher >/dev/null 2>&1 </dev/null

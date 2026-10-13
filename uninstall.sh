@@ -15,6 +15,7 @@ pkill -f bitedj_launcher.py || true
 sudo rm -rf /opt/bitedj-launcher /usr/local/bin/bitedj-launcher /usr/local/bin/bite-launcher-open /usr/share/applications/bite-launcher.desktop
 DESKTOP_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
 rm -f "$DESKTOP_DIR/bite-launcher.desktop" "$HOME/Desktop/bite-launcher.desktop"
+rm -rf "$HOME/.config/bite-launcher"
 
 if [ "$KEEP_OFF" = 0 ]; then
   for CONFIG in /boot/firmware/config.txt /boot/config.txt; do
