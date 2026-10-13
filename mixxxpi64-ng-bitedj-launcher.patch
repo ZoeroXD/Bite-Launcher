@@ -8,10 +8,10 @@ index bb4f0c3..2054721 100644
  zram-tools
 +python3-pyqt6
 diff --git a/stage-mixxx/03-kiosk/00-run.sh b/stage-mixxx/03-kiosk/00-run.sh
-index 1aa224a..409ffde 100755
+index 1aa224a..c09861b 100755
 --- a/stage-mixxx/03-kiosk/00-run.sh
 +++ b/stage-mixxx/03-kiosk/00-run.sh
-@@ -5,6 +5,13 @@ install -m 644 files/autostart "$H/.config/labwc/autostart"
+@@ -5,8 +5,18 @@ install -m 644 files/autostart "$H/.config/labwc/autostart"
  install -m 644 files/rc.xml "$H/.config/labwc/rc.xml"
  install -m 755 files/djrig-launch "${ROOTFS_DIR}/usr/local/bin/djrig-launch"
  install -m 755 files/djrig-display "${ROOTFS_DIR}/usr/local/bin/djrig-display"
@@ -25,6 +25,11 @@ index 1aa224a..409ffde 100755
  install -m 644 files/djrig.conf "${ROOTFS_DIR}/etc/djrig.conf"
  cat >> "$H/.bash_profile" <<'P'
  # Start the DJ session on the local console only (SSH sessions are unaffected)
+ if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then exec labwc; fi
+ P
++# Hide the rainbow boot screen (GPU firmware splash)
++CFG="${ROOTFS_DIR}/boot/firmware/config.txt"; [ -f "$CFG" ] || CFG="${ROOTFS_DIR}/boot/config.txt"
++grep -qE '^\s*disable_splash\s*=\s*1' "$CFG" || printf '\n# Bite Launcher: hide the rainbow boot screen\n[all]\ndisable_splash=1\n# end Bite Launcher\n' >> "$CFG"
 diff --git a/stage-mixxx/03-kiosk/files/autostart b/stage-mixxx/03-kiosk/files/autostart
 index b8f8367..cfaeae0 100644
 --- a/stage-mixxx/03-kiosk/files/autostart

@@ -1,10 +1,15 @@
 #!/bin/bash
-# BiteDJ Launcher installer for the Raspberry Pi DJ rig (labwc kiosk session).
+# Bite Launcher installer for the Raspberry Pi DJ rig.
 # Run as the DJ user (not root):  ./install.sh
+#   --keep-rainbow   leave the Raspberry Pi rainbow boot screen as it is
 set -e
 [ "$(id -u)" -eq 0 ] && { echo "Run as your normal user; sudo is used where needed."; exit 1; }
 cd "$(dirname "$0")"
+KEEP_RAINBOW=0
+for a in "$@"; do [ "$a" = "--keep-rainbow" ] && KEEP_RAINBOW=1; done
 AUTOSTART="$HOME/.config/labwc/autostart"
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+[ -z "$DBUS_SESSION_BUS_ADDRESS" ] && [ -S "$XDG_RUNTIME_DIR/bus" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
 echo ">> Installing packages"
 sudo apt-get update -q
@@ -16,16 +21,16 @@ sudo install -m 755 bitedj_launcher.py /opt/bitedj-launcher/bitedj_launcher.py
 sudo install -m 755 bitedj-launcher /usr/local/bin/bitedj-launcher
 sudo install -m 755 bite-launcher-open /usr/local/bin/bite-launcher-open
 sudo install -m 644 bite-launcher.png /opt/bitedj-launcher/bite-launcher.png
+sudo touch /etc/djrig.conf
+grep -q "BiteDJ Launcher" /etc/djrig.conf || sudo tee -a /etc/djrig.conf < djrig-launcher.conf >/dev/null
 
-echo ">> Adding the Bite Launcher shortcut (app menu + desktop)"
+echo ">> Adding the Bite Launcher shortcut (desktop + app menu)"
 sudo install -m 644 bite-launcher.desktop /usr/share/applications/bite-launcher.desktop
 DESKTOP_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
 mkdir -p "$DESKTOP_DIR"
 install -m 755 bite-launcher.desktop "$DESKTOP_DIR/bite-launcher.desktop"
-# Mark it trusted so the file manager opens it without an "Execute?" prompt
-gio set "$DESKTOP_DIR/bite-launcher.desktop" metadata::trusted true 2>/dev/null || true
-sudo touch /etc/djrig.conf
-grep -q "BiteDJ Launcher" /etc/djrig.conf || sudo tee -a /etc/djrig.conf < djrig-launcher.conf >/dev/null
+# Trusted = double-click runs it instead of asking or opening it as text
+gio set "$DESKTOP_DIR/bite-launcher.desktop" metadata::trust true 2>/dev/null || true
 
 echo ">> Updating labwc autostart"
 mkdir -p "$(dirname "$AUTOSTART")"
@@ -38,10 +43,26 @@ if ! grep -q bitedj-launcher "$AUTOSTART"; then
   sed -i '1i swaybg -c "#000000" &   # bitedj-launcher: black backdrop' "$AUTOSTART"
   echo '/usr/local/bin/bitedj-launcher &   # bitedj-launcher' >> "$AUTOSTART"
 fi
-python3 /opt/bitedj-launcher/bitedj_launcher.py --list-controllers | head -1
-if [ -x "$HOME/bin/bite-mode" ]; then
-  echo ">> Mode switch: found ~/bin/bite-mode (Switch to Pi Desktop button, Ctrl+Alt+D and FLX4 4 BEAT/EXIT hold are active)"
-else
-  echo ">> Mode switch: install BiteDJ-On-Off-Macro-with-FLX4 to enable switching to the Pi Desktop"
+
+# The rainbow square at power-on is the GPU firmware's splash screen; disable_splash=1 hides it.
+# It's only a picture: hiding it skips no hardware checks and doesn't slow or change booting.
+echo ">> Rainbow boot screen"
+CONFIG=/boot/firmware/config.txt
+[ -f "$CONFIG" ] || CONFIG=/boot/config.txt
+RAINBOW="kept (--keep-rainbow)"
+if [ "$KEEP_RAINBOW" = 0 ]; then
+  if [ ! -f "$CONFIG" ]; then
+    RAINBOW="config.txt not found, left as is"
+  elif grep -qE '^\s*disable_splash\s*=\s*1' "$CONFIG"; then
+    RAINBOW="already off ($CONFIG)"
+  else
+    [ -f "$CONFIG.pre-bite-launcher" ] || sudo cp "$CONFIG" "$CONFIG.pre-bite-launcher"
+    # An existing "disable_splash=0" is parked (so uninstall can restore it), then ours goes under [all]
+    sudo sed -i 's/^\(\s*disable_splash\s*=.*\)$/#bite-launcher# \1/' "$CONFIG"
+    printf '\n# Bite Launcher: hide the rainbow boot screen\n[all]\ndisable_splash=1\n# end Bite Launcher\n' | sudo tee -a "$CONFIG" >/dev/null
+    RAINBOW="turned off ($CONFIG, backup: $CONFIG.pre-bite-launcher)"
+  fi
 fi
+
+echo
 echo ">> Done. Reboot (sudo reboot) to start the Bite Launcher."

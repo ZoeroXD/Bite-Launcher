@@ -44,11 +44,22 @@ The installer:
 
 1. Installs `python3-pyqt6` and `swaybg`. Qt is already on the Pi because BiteDJ uses it.
 2. Copies the launcher to `/opt/bitedj-launcher` and adds `/usr/local/bin/bitedj-launcher`, which restarts the launcher if it ever crashes.
-3. Adds the **Bite Launcher** shortcut to the app menu (`/usr/share/applications`) and to the desktop (`~/Desktop`), marked as trusted so it opens without a prompt.
+3. Creates the **Bite Launcher** shortcut on the desktop (`~/Desktop`) and in the app menu (**Sound & Video**), marked trusted so double-clicking launches it.
 4. Adds the launcher settings to `/etc/djrig.conf`.
 5. In `~/.config/labwc/autostart`, comments out `djrig-launch` (which started BiteDJ straight away), adds a black `swaybg` background and starts `bitedj-launcher`. A backup is saved as `autostart.pre-launcher`.
+6. Hides the rainbow boot screen (see below).
 
-To undo everything, run `./uninstall.sh`.
+To undo everything, run `./uninstall.sh`. It also brings the rainbow screen back; add `--keep-rainbow-off` to leave it hidden.
+
+## Rainbow boot screen
+
+The rainbow square at power-on is the GPU firmware's splash screen. The installer adds `disable_splash=1` to `/boot/firmware/config.txt` (or `/boot/config.txt` on older systems), which is the official setting for hiding it ([Raspberry Pi documentation](https://www.raspberrypi.com/documentation/computers/config_txt.html)). It's only a picture: hiding it skips no hardware checks and doesn't change how the Pi boots.
+
+- The original file is backed up once as `config.txt.pre-bite-launcher`.
+- If the setting is already on (for example from RPiBiter Startup Cleanup), nothing is changed.
+- An existing `disable_splash=0` line is commented out so uninstall can put it back.
+- To keep the rainbow, install with `./install.sh --keep-rainbow`.
+- It takes effect at the next reboot.
 
 ## Switch between Bite Launcher and the Pi desktop
 
@@ -69,6 +80,8 @@ If `bite-mode` isn't installed, **Switch to Pi Desktop** shows a short note sayi
 ## Bite Launcher shortcut
 
 `bite-launcher.desktop` shows as **Bite Launcher** with the striped-fin icon, on the desktop and in the app menu. It runs `bite-launcher-open`, which switches back to launcher mode through `bite-mode` when it's installed, or simply opens the launcher when it isn't. Only one copy runs at a time, so opening it while the launcher is already on screen does nothing.
+
+If double-clicking the desktop icon asks what to do with the file, choose **Execute**. This only happens when the installer couldn't mark it trusted, for example when it was installed over SSH before the desktop had started. Running `./install.sh` again from a terminal on the desktop fixes it.
 
 ## Build it into the image
 
