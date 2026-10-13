@@ -1,0 +1,1166 @@
+diff --git a/stage-mixxx/00-base/00-packages-nr b/stage-mixxx/00-base/00-packages-nr
+index bb4f0c3..2054721 100644
+--- a/stage-mixxx/00-base/00-packages-nr
++++ b/stage-mixxx/00-base/00-packages-nr
+@@ -17,3 +17,4 @@ udisks2
+ udiskie
+ polkitd
+ zram-tools
++python3-pyqt6
+diff --git a/stage-mixxx/03-kiosk/00-run.sh b/stage-mixxx/03-kiosk/00-run.sh
+index 1aa224a..64a8230 100755
+--- a/stage-mixxx/03-kiosk/00-run.sh
++++ b/stage-mixxx/03-kiosk/00-run.sh
+@@ -5,6 +5,12 @@ install -m 644 files/autostart "$H/.config/labwc/autostart"
+ install -m 644 files/rc.xml "$H/.config/labwc/rc.xml"
+ install -m 755 files/djrig-launch "${ROOTFS_DIR}/usr/local/bin/djrig-launch"
+ install -m 755 files/djrig-display "${ROOTFS_DIR}/usr/local/bin/djrig-display"
++install -d "${ROOTFS_DIR}/opt/bitedj-launcher"
++install -m 755 files/bitedj_launcher.py "${ROOTFS_DIR}/opt/bitedj-launcher/bitedj_launcher.py"
++install -m 755 files/bitedj-launcher "${ROOTFS_DIR}/usr/local/bin/bitedj-launcher"
++install -m 644 files/bite-launcher.png "${ROOTFS_DIR}/opt/bitedj-launcher/bite-launcher.png"
++install -m 644 files/bite-launcher.desktop "${ROOTFS_DIR}/usr/share/applications/bite-launcher.desktop"
++install -d "$H/Desktop" && install -m 755 files/bite-launcher.desktop "$H/Desktop/bite-launcher.desktop"
+ install -m 644 files/djrig.conf "${ROOTFS_DIR}/etc/djrig.conf"
+ cat >> "$H/.bash_profile" <<'P'
+ # Start the DJ session on the local console only (SSH sessions are unaffected)
+diff --git a/stage-mixxx/03-kiosk/files/autostart b/stage-mixxx/03-kiosk/files/autostart
+index b8f8367..cfaeae0 100644
+--- a/stage-mixxx/03-kiosk/files/autostart
++++ b/stage-mixxx/03-kiosk/files/autostart
+@@ -1,6 +1,10 @@
+ # labwc autostart for MixxxPi64-NG + BiteDJ
++swaybg -c "#000000" &   # black backdrop: no Raspberry Pi desktop is ever shown
+ [ -x /usr/local/bin/djrig-display ] && /usr/local/bin/djrig-display &
+ unclutter-xfixes --timeout 2 &
+ # Auto-mount USB sticks under /media/$USER (where BiteDJ looks for Rekordbox drives)
+ udiskie --no-tray --no-notify --no-file-manager &
+-/usr/local/bin/djrig-launch &
++# BiteDJ Launcher waits for a supported controller, then shows the Launch button.
++# To start BiteDJ straight away instead (old behaviour), swap these two lines.
++/usr/local/bin/bitedj-launcher &
++#/usr/local/bin/djrig-launch &
+diff --git a/stage-mixxx/03-kiosk/files/bite-launcher.desktop b/stage-mixxx/03-kiosk/files/bite-launcher.desktop
+new file mode 100644
+index 0000000..fc8640e
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/bite-launcher.desktop
+@@ -0,0 +1,12 @@
++[Desktop Entry]
++Type=Application
++Version=1.0
++Name=Bite Launcher
++GenericName=BiteDJ Launcher
++Comment=Waits for a BiteDJ-supported controller, then launches BiteDJ
++Exec=python3 /opt/bitedj-launcher/bitedj_launcher.py
++Icon=/opt/bitedj-launcher/bite-launcher.png
++Terminal=false
++Categories=AudioVideo;Audio;Music;
++Keywords=BiteDJ;DJ;Mixxx;Controller;
++StartupWMClass=bitedj-launcher
+diff --git a/stage-mixxx/03-kiosk/files/bite-launcher.png b/stage-mixxx/03-kiosk/files/bite-launcher.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..0f0131ec673aa953066d48cb18a83e38d35a4b4e
+GIT binary patch
+literal 12696
+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
+NUPf8ET+%q`e*l<`%^Cmz
+
+literal 0
+HcmV?d00001
+
+diff --git a/stage-mixxx/03-kiosk/files/bitedj-launcher b/stage-mixxx/03-kiosk/files/bitedj-launcher
+new file mode 100755
+index 0000000..d9ba778
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/bitedj-launcher
+@@ -0,0 +1,7 @@
++#!/bin/sh
++# Keeps the BiteDJ Launcher on screen; restarts it if it ever exits or crashes.
++export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-wayland}
++while true; do
++  python3 /opt/bitedj-launcher/bitedj_launcher.py "$@"
++  sleep 1
++done
+diff --git a/stage-mixxx/03-kiosk/files/bitedj_launcher.py b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
+new file mode 100755
+index 0000000..fd6693d
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
+@@ -0,0 +1,824 @@
++#!/usr/bin/env python3
++"""BiteDJ Launcher - a minimal, black, touch-first home screen for the Raspberry Pi DJ rig.
++
++* Hides every trace of the Raspberry Pi desktop: no panel, no menu, no wallpaper.
++* Keeps a tiny system tray: Ethernet, Wi-Fi and the clock (tap it for network details).
++* Asks for a BiteDJ-supported controller in the centre of the screen.
++* A striped shark fin (Bite DJ logo colours) swims along the bottom edge, left->right->left.
++* When a supported controller is plugged in: "Controller Recognized" + a purple Launch button.
++
++Runs under labwc (Wayland). Requires only python3-pyqt6.
++"""
++import argparse
++import fcntl
++import math
++import os
++import re
++import shlex
++import socket
++import struct
++import sys
++import time
++import xml.etree.ElementTree as ET
++
++from PyQt6.QtCore import QElapsedTimer, QPointF, QProcess, QProcessEnvironment, QRect, QRectF, Qt, QTimer
++from PyQt6.QtGui import (QColor, QFont, QFontMetrics, QGuiApplication, QImage, QPainter,
++                         QPainterPath, QPen, QPixmap)
++from PyQt6.QtWidgets import QApplication, QWidget
++
++# --------------------------------------------------------------------------- palette (from Bite-DJ-logo.png)
++CHARCOAL = "#231f20"
++GRAY = "#44403e"
++RED = "#c8372d"
++ORANGE = "#f15a22"
++BLUE = "#27aae1"
++PURPLE = "#9d55e2"
++# Logo stripe order, top -> bottom, with relative band heights measured from the logo
++STRIPES = [(CHARCOAL, 11), (GRAY, 15), (RED, 15), (ORANGE, 15), (BLUE, 15), (PURPLE, 15), (GRAY, 15), (CHARCOAL, 11)]
++
++CONF_FILE = os.environ.get("DJRIG_CONF", "/etc/djrig.conf")
++DEFAULT_CONTROLLER_DIRS = [
++    "/opt/bitedj/share/mixxx/controllers",   # mixxxpi64-ng-bitedj image install prefix
++    "/opt/bitedj/share/bitedj/controllers",
++    "~/bitedj/res/controllers",               # source checkout (BiteDJ-On-Off-Macro layout)
++    "~/.bitedj/controllers",                  # user mappings
++    "~/.mixxx/controllers",
++]
++# Internal/virtual sound and MIDI devices that must never count as a DJ controller
++IGNORE = re.compile(r"vc4hdmi|vc4-hdmi|bcm2835|headphones|midi through|^system$|timer|announce|pipewire|"
++                    r"usb2\.0 hub|root hub|xhci|hub$", re.I)
++
++
++# Mapping IDs that are only a brand or a generic word would match unsupported gear
++GENERIC = {"numark", "reloop", "vestax", "gemini", "pioneer", "denon", "hercules", "behringer", "akai", "korg",
++           "novation", "roland", "traktor", "mixer", "mixer1", "midi", "controller", "usbmidi", "usbaudio"}
++
++
++def norm(s):
++    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
++
++
++def load_conf(path=CONF_FILE):
++    conf = {}
++    try:
++        with open(path) as f:
++            for line in f:
++                line = line.split("#", 1)[0].strip()
++                if "=" in line:
++                    k, v = line.split("=", 1)
++                    v = v.strip()
++                    try:
++                        v = " ".join(shlex.split(v))
++                    except ValueError:
++                        pass
++                    conf[k.strip()] = v
++    except OSError:
++        pass
++    return conf
++
++
++def controller_dirs(conf):
++    """Mapping folders to search. Stock Mixxx mappings are added when DJRIG_APP=mixxx."""
++    custom = os.environ.get("BITEDJ_CONTROLLER_DIRS") or conf.get("BITEDJ_CONTROLLER_DIRS")
++    if custom:
++        return custom.split(":")
++    dirs = list(DEFAULT_CONTROLLER_DIRS)
++    if conf.get("DJRIG_APP", "bitedj") == "mixxx":
++        dirs += ["/usr/share/mixxx/controllers", "~/.mixxx/controllers"]
++    return dirs
++
++
++def read(path, default=""):
++    try:
++        with open(path) as f:
++            return f.read().strip()
++    except OSError:
++        return default
++
++
++# --------------------------------------------------------------------------- controller detection
++class ControllerCatalog:
++    """Every controller BiteDJ has a mapping for, read from the installed *.midi.xml / *.hid.xml files."""
++
++    # Used only if no mapping directory can be found (e.g. testing on a laptop)
++    FALLBACK = [("Pioneer DDJ-FLX4", ["ddjflx4", "pioneerddjflx4"], [])]
++
++    def __init__(self, dirs):
++        self.entries = []          # (display name, [name tokens], [(vid, pid)])
++        for d in dirs:
++            d = os.path.expanduser(d)
++            if not os.path.isdir(d):
++                continue
++            for fn in sorted(os.listdir(d)):
++                if fn.endswith((".midi.xml", ".hid.xml", ".bulk.xml")):
++                    self._load(os.path.join(d, fn))
++        if not self.entries:
++            self.entries = list(self.FALLBACK)
++
++    def _load(self, path):
++        try:
++            root = ET.parse(path).getroot()
++        except (ET.ParseError, OSError):
++            return
++        name = (root.findtext("info/name") or "").strip()
++        tokens = set()
++        for raw in [name] + [c.get("id", "") for c in root.iter("controller")]:
++            t = norm(raw)
++            t = re.sub(r"(midi\d*|port\d*|\d+)$", lambda m: "" if m.group(0).startswith(("midi", "port")) else m.group(0), t)
++            if len(t) >= 4 and t not in GENERIC:
++                tokens.add(t)
++        usb = set()
++        for p in root.iter("product"):
++            try:
++                usb.add((int(p.get("vendor_id"), 16), int(p.get("product_id"), 16)))
++            except (TypeError, ValueError):
++                pass
++        if tokens or usb:
++            self.entries.append((name or os.path.basename(path).split(".")[0], sorted(tokens, key=len, reverse=True), sorted(usb)))
++
++    def match(self, devices):
++        """devices: list of (label, (vid, pid) or None). Returns (mapping name, device label) or None."""
++        best = None
++        for label, usbid in devices:
++            if IGNORE.search(label or ""):
++                continue
++            n = norm(label)
++            for name, tokens, usb in self.entries:
++                score = 0
++                if usbid and usbid in usb:
++                    score = 1000
++                else:
++                    for t in tokens:
++                        if t in n:
++                            score = len(t)
++                            break
++                if score and (best is None or score > best[0]):
++                    best = (score, name, label)
++        return (best[1], best[2]) if best else None
++
++
++def connected_devices():
++    """USB devices, ALSA cards and ALSA sequencer (MIDI) clients currently present."""
++    devs = []
++    base = "/sys/bus/usb/devices"
++    if os.path.isdir(base):
++        for d in os.listdir(base):
++            p = os.path.join(base, d)
++            vid, pid = read(p + "/idVendor"), read(p + "/idProduct")
++            if not vid or read(p + "/bDeviceClass") == "09":   # skip hubs
++                continue
++            try:
++                usbid = (int(vid, 16), int(pid, 16))
++            except ValueError:
++                usbid = None
++            label = (read(p + "/manufacturer") + " " + read(p + "/product")).strip()
++            devs.append((label or f"{vid}:{pid}", usbid))
++    lines = read("/proc/asound/cards").splitlines()
++    for i, line in enumerate(lines):
++        m = re.match(r"\s*\d+\s+\[(.+?)\s*\]:\s*\S+\s+-\s+(.*)", line)
++        if m:
++            longname = lines[i + 1].strip() if i + 1 < len(lines) else ""
++            devs.append((f"{m.group(2)} {longname} {m.group(1)}", None))
++    for m in re.finditer(r'Client\s+\d+\s*:\s*"(.+?)"\s*\[Kernel\]', read("/proc/asound/seq/clients")):
++        devs.append((m.group(1), None))
++    return devs
++
++
++# --------------------------------------------------------------------------- network status
++def iface_ip(ifname):
++    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
++    try:
++        return socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, struct.pack("256s", ifname[:15].encode()))[20:24])
++    except OSError:
++        return ""
++    finally:
++        s.close()
++
++
++class Network:
++    def __init__(self):
++        self.wifi_iface = self.eth_iface = None
++        self.wifi_up = self.eth_up = False
++        self.wifi_signal = 0          # 0..100
++        self.ssid = ""
++        self.wifi_ip = self.eth_ip = ""
++        self._nm = QProcess()
++        self._nm.finished.connect(self._nm_done)
++
++    def refresh(self):
++        self.wifi_iface = self.eth_iface = None
++        for n in sorted(os.listdir("/sys/class/net")) if os.path.isdir("/sys/class/net") else []:
++            if os.path.isdir(f"/sys/class/net/{n}/wireless") and not self.wifi_iface:
++                self.wifi_iface = n
++            elif n.startswith(("eth", "en")) and not self.eth_iface:
++                self.eth_iface = n
++        self.eth_up = bool(self.eth_iface) and read(f"/sys/class/net/{self.eth_iface}/carrier") == "1"
++        self.eth_ip = iface_ip(self.eth_iface) if self.eth_up else ""
++        self.wifi_up, self.wifi_signal, self.wifi_ip = False, 0, ""
++        if self.wifi_iface:
++            for line in read("/proc/net/wireless").splitlines()[2:]:
++                parts = line.split()
++                if parts and parts[0].rstrip(":") == self.wifi_iface:
++                    try:
++                        self.wifi_signal = max(0, min(100, int(float(parts[2]) / 70 * 100)))
++                    except (IndexError, ValueError):
++                        pass
++            self.wifi_ip = iface_ip(self.wifi_iface)
++            self.wifi_up = read(f"/sys/class/net/{self.wifi_iface}/operstate") == "up" and bool(self.wifi_ip)
++        if not self.wifi_up:
++            self.ssid = ""
++        elif self._nm.state() == QProcess.ProcessState.NotRunning:
++            # Ask NetworkManager for the SSID without blocking the UI
++            self._nm.start("nmcli", ["-t", "-f", "ACTIVE,SSID", "device", "wifi", "list", "--rescan", "no"])
++
++    def _nm_done(self):
++        out = bytes(self._nm.readAllStandardOutput()).decode(errors="ignore")
++        for line in out.splitlines():
++            if line.startswith("yes:"):
++                self.ssid = line[4:].replace("\\:", ":")
++                return
++
++
++# --------------------------------------------------------------------------- shark fin artwork
++# Shape constants measured from the "D" in Bite-DJ-logo.png
++D_EXPONENT = 2.9          # best fit to the D's outer bowl (superellipse: squarer than a circle, rounder than a box)
++D_ASPECT = 1.41           # the D's bowl is 1.41x as wide (84 px) as its half-height (59.5 px)
++TIP_X = 0.05              # sharp top-rear corner (the D's top-left corner)
++TAIL_X = 0.30             # rear end of the base
++
++
++def fin_path(w, h):
++    """Dorsal fin facing right. The leading edge is the D's bowl curve; the rear edge carries the D's bite."""
++    p = QPainterPath()
++    cx, a, b = w * TIP_X, w * (1 - TIP_X), h
++    p.moveTo(cx, 0)
++    steps = 64
++    for i in range(1, steps + 1):                       # quarter superellipse: tip -> front base
++        th = (math.pi / 2) * (1 - i / steps)
++        x = cx + a * math.cos(th) ** (2 / D_EXPONENT)
++        y = h - b * math.sin(th) ** (2 / D_EXPONENT)
++        p.lineTo(x, y)
++    p.lineTo(w * TAIL_X, h)                             # base
++    rear = (w * TAIL_X, h, w * 0.20, h * 0.60, w * 0.10, h * 0.28, cx, 0)
++    p.cubicTo(*rear[2:])                                # rear edge, slightly concave
++    p.closeSubpath()
++
++    def rear_x(t):                                      # x on the rear edge at curve parameter t
++        x0, _, x1, _, x2, _, x3, _ = rear
++        return (1 - t) ** 3 * x0 + 3 * t * (1 - t) ** 2 * x1 + 3 * t * t * (1 - t) * x2 + t ** 3 * x3
++
++    def rear_y(t):
++        _, y0, _, y1, _, y2, _, y3 = rear
++        return (1 - t) ** 3 * y0 + 3 * t * (1 - t) ** 2 * y1 + 3 * t * t * (1 - t) * y2 + t ** 3 * y3
++    # One big bite made of three overlapping round lobes centred on the rear edge, like the D
++    bite = QPainterPath()
++    for t, r in ((0.30, 0.14), (0.48, 0.16), (0.66, 0.14)):
++        lobe = QPainterPath()
++        lobe.addEllipse(QPointF(rear_x(t) - h * 0.07, rear_y(t)), h * r, h * r)
++        bite = bite.united(lobe)
++    return p.subtracted(bite).simplified()
++
++
++def render_fin(w, h, dpr, facing_right=True):
++    img = QImage(int(w * dpr), int(h * dpr), QImage.Format.Format_ARGB32_Premultiplied)
++    img.setDevicePixelRatio(dpr)
++    img.fill(Qt.GlobalColor.transparent)
++    qp = QPainter(img)
++    qp.setRenderHint(QPainter.RenderHint.Antialiasing)
++    if not facing_right:
++        qp.translate(w, 0)
++        qp.scale(-1, 1)
++    line = 2.0                                          # logo keyline: ~2 px of black
++    white = 2.5                                         # logo ground: 2-3 px of white around the black
++    pad = line + white + 1
++    path = fin_path(w - 2 * pad, h - pad).translated(pad, pad)
++    qp.setBrush(Qt.BrushStyle.NoBrush)
++    pen = QPen(QColor("#ffffff"), line + 2 * white)     # white ring first...
++    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
++    qp.setPen(pen)
++    qp.drawPath(path)
++    qp.save()                                           # ...then the stripes cover its inner half...
++    qp.setClipPath(path)
++    total = sum(s for _, s in STRIPES)
++    y = pad
++    for color, size in STRIPES:
++        bh = (h - pad) * size / total
++        qp.fillRect(QRectF(0, y, w, bh + 1), QColor(color))
++        y += bh
++    qp.restore()
++    pen.setColor(QColor("#000000"))                     # ...and the black keyline sits on the edge
++    pen.setWidthF(line)
++    qp.setPen(pen)
++    qp.drawPath(path)
++    qp.end()
++    return QPixmap.fromImage(img)
++
++
++# --------------------------------------------------------------------------- main screen
++WAITING, RECOGNIZED, RUNNING = "waiting", "recognized", "running"
++
++
++class Desktop(QWidget):
++    def __init__(self, args, conf):
++        super().__init__()
++        self.args, self.conf = args, conf
++        self.setWindowTitle("Bite Launcher")
++        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
++        self.setAutoFillBackground(False)
++        self.setCursor(Qt.CursorShape.BlankCursor if not args.windowed else Qt.CursorShape.ArrowCursor)
++
++        dirs = controller_dirs(conf)
++        self.catalog = ControllerCatalog(dirs)
++        self.controller = None          # (mapping name, device label)
++        self.state = WAITING
++        self.prev_state, self.fade = WAITING, 1.0
++        self.message = ""
++        self.net = Network()
++        self.net_open = False
++        self.pressed = False
++        self.proc = None
++        self.launch_started = 0.0
++        self.external_running = False
++
++        self.clock = QElapsedTimer()
++        self.clock.start()
++        self.fin_cache = {}
++        self.fin_rect = QRect()
++
++        self.anim = QTimer(self, interval=16, timerType=Qt.TimerType.PreciseTimer)
++        self.anim.timeout.connect(self.tick)
++        self.anim.start()
++        self.poll = QTimer(self, interval=1500)
++        self.poll.timeout.connect(self.scan)
++        self.poll.start()
++        self.slow = QTimer(self, interval=4000)
++        self.slow.timeout.connect(self.refresh_net)
++        self.slow.start()
++        self.sec = QTimer(self, interval=1000)
++        self.sec.timeout.connect(lambda: self.update(self.tray_rect().adjusted(-300, 0, 0, 0)))
++        self.sec.start()
++        if not args.demo_controller:
++            self.scan()
++        else:
++            self.set_controller(("Pioneer DDJ-FLX4", "Pioneer DDJ-FLX4"))
++        self.refresh_net()
++
++    # ---------------------------------------------------------------- geometry helpers
++    @property
++    def u(self):
++        """Layout unit: 1% of screen height (8 px on the 1280x800 panel)."""
++        return max(4.0, self.height() / 100.0)
++
++    def font(self, size, weight=QFont.Weight.Normal, spacing=0.0):
++        f = QFont()
++        f.setFamilies(["Inter", "Open Sans", "DejaVu Sans", "Sans Serif"])
++        f.setPixelSize(max(8, int(size)))
++        f.setWeight(weight)
++        if spacing:
++            f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, spacing)
++        return f
++
++    def tray_rect(self):
++        u = self.u
++        return QRect(int(self.width() - 34 * u), 0, int(34 * u), int(6 * u))
++
++    def button_rect(self):
++        u = self.u
++        w, h = 30 * u, 9 * u
++        return QRectF(self.width() / 2 - w / 2, self.height() * 0.5 + 7.5 * u, w, h)
++
++    def center_rect(self):
++        u = self.u
++        return QRect(0, int(self.height() * 0.5 - 20 * u), self.width(), int(40 * u))
++
++    # ---------------------------------------------------------------- state
++    def set_state(self, s):
++        if s != self.state:
++            self.prev_state, self.state, self.fade = self.state, s, 0.0
++            if s == RUNNING:
++                self.net_open = False
++            self.update()
++
++    def set_controller(self, c):
++        changed = (c or (None,))[0] != (self.controller or (None,))[0]
++        self.controller = c
++        if self.state != RUNNING:
++            self.set_state(RECOGNIZED if c else WAITING)
++        if changed:
++            self.update()
++            if c and self.conf.get("BITEDJ_LAUNCHER_AUTOLAUNCH", "0") == "1" and self.state == RECOGNIZED:
++                QTimer.singleShot(1200, self.launch)
++
++    def scan(self):
++        if not self.args.demo_controller:
++            self.set_controller(self.catalog.match(connected_devices()))
++        # BiteDJ may also be started by the FLX4 hold-button macro or over SSH
++        ext = self.bitedj_pid() is not None and self.proc is None
++        if ext != self.external_running:
++            self.external_running = ext
++            if ext:
++                self.set_state(RUNNING)
++            elif self.proc is None:
++                self.set_state(RECOGNIZED if self.controller else WAITING)
++
++    def refresh_net(self):
++        if self.state != RUNNING:
++            self.net.refresh()
++            self.update(self.tray_rect().adjusted(-300, 0, 0, 0))
++            if self.net_open:
++                self.update(self.net_panel_rect().toAlignedRect().adjusted(-4, -4, 4, 4))
++
++    def app_cmd(self):
++        app = self.conf.get("DJRIG_APP", "bitedj")
++        for cand in (app, "/usr/local/bin/bitedj", "/opt/bitedj/bin/bitedj", "/opt/bitedj/bin/mixxx",
++                     os.path.expanduser("~/bitedj/build/mixxx"), "mixxx"):
++            path = cand if os.path.isabs(cand) else next((os.path.join(d, cand) for d in os.environ.get("PATH", "").split(":")
++                                                         if os.access(os.path.join(d, cand), os.X_OK)), None)
++            if path and os.access(path, os.X_OK):
++                return path
++        return None
++
++    def bitedj_pid(self):
++        cmd = self.app_cmd()
++        if not cmd:
++            return None
++        targets = {os.path.realpath(cmd), cmd}
++        for pid in os.listdir("/proc"):
++            if pid.isdigit() and int(pid) != os.getpid():
++                try:
++                    with open(f"/proc/{pid}/cmdline", "rb") as f:
++                        argv0 = f.read().split(b"\0", 1)[0].decode(errors="ignore")
++                except OSError:
++                    continue
++                if argv0 and (argv0 in targets or os.path.realpath(argv0) in targets):
++                    return int(pid)
++        return None
++
++    def launch(self):
++        if self.state == RUNNING or self.proc is not None:
++            return
++        cmd = self.app_cmd()
++        if not cmd:
++            self.message = "BiteDJ is not installed"
++            self.update()
++            return
++        env = QProcessEnvironment.systemEnvironment()
++        env.insert("QT_QPA_PLATFORM", self.conf.get("DJRIG_QPA", "wayland"))
++        if "mixxx" not in os.path.basename(os.path.realpath(cmd)) or "bitedj" in cmd:
++            env.insert("QT_SCALE_FACTOR", self.conf.get("DJRIG_BITEDJ_SCALE", "1.6"))
++        self.proc = QProcess(self)
++        self.proc.setProcessEnvironment(env)
++        self.proc.setWorkingDirectory(os.path.dirname(os.path.realpath(cmd)))
++        self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.ForwardedChannels)
++        self.proc.finished.connect(self.on_finished)
++        self.proc.errorOccurred.connect(lambda e: e == QProcess.ProcessError.FailedToStart and self.on_finished(-1, None))
++        self.message = ""
++        self.launch_started = time.monotonic()
++        self.proc.start(cmd, ["--fullScreen"])
++        self.set_state(RUNNING)
++
++    def on_finished(self, code, _status):
++        quick = time.monotonic() - self.launch_started < 20
++        self.proc = None
++        name = "Mixxx" if self.conf.get("DJRIG_APP") == "mixxx" else "BiteDJ"
++        self.message = f"{name} closed unexpectedly. Tap Launch to try again." if (quick and code != 0) else ""
++        self.set_state(RECOGNIZED if self.controller else WAITING)
++        self.scan()
++
++    # ---------------------------------------------------------------- animation
++    def tick(self):
++        if self.state == RUNNING and self.fade >= 1.0:
++            return       # BiteDJ is on screen: spend zero CPU here
++        if self.fade < 1.0:
++            self.fade = min(1.0, self.fade + 0.016 / 0.35)
++        self.update(self.center_rect())
++        new = self.fin_geometry()[0]
++        self.update(self.fin_rect.united(new).adjusted(-2, -2, 2, 2))
++        self.fin_rect = new
++
++    def fin_geometry(self):
++        """Fin rect + direction. Swims left->right, disappears, then right->left, and repeats."""
++        W, H = self.width(), self.height()
++        fh = H * 0.15
++        fw = fh * D_ASPECT / (1 - TIP_X)          # keep the D's exact width-to-height ratio
++        swim = float(self.conf.get("BITEDJ_FIN_SECONDS", "30"))
++        pause = 4.0
++        span = W + fw * 2
++        t = self.clock.elapsed() / 1000.0
++        cycle = (swim + pause) * 2
++        ph = t % cycle
++        right = ph < swim + pause
++        p = min(1.0, (ph if right else ph - swim - pause) / swim)
++        x = -fw + p * span - fw if right else W + fw - p * span
++        sink = fh * 0.06                                        # base sits just below the bottom edge
++        y = H - fh + sink                                      # steady glide, no bobbing
++        return QRect(int(x), int(y), int(fw + 1), int(fh + 1)), right, fw, fh
++
++    # ---------------------------------------------------------------- painting
++    def paintEvent(self, ev):
++        qp = QPainter(self)
++        qp.setRenderHint(QPainter.RenderHint.Antialiasing)
++        qp.setRenderHint(QPainter.RenderHint.TextAntialiasing)
++        qp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
++        qp.fillRect(ev.rect(), Qt.GlobalColor.black)
++        if self.state == RUNNING and self.fade >= 1.0:
++            return
++        self.paint_tray(qp)
++        t = self.clock.elapsed() / 1000.0
++        if self.fade < 1.0:
++            self.paint_center(qp, self.prev_state, 1.0 - self.fade, t)
++        self.paint_center(qp, self.state, self.fade, t)
++        self.paint_fin(qp)
++        if self.net_open:
++            self.paint_net_panel(qp)
++
++    def paint_fin(self, qp):
++        rect, right, fw, fh = self.fin_geometry()
++        dpr = self.devicePixelRatioF()
++        key = (int(fw), int(fh), right, dpr)
++        if key not in self.fin_cache:
++            self.fin_cache = {k: v for k, v in self.fin_cache.items() if k[:2] == key[:2]}
++            self.fin_cache[key] = render_fin(fw, fh, dpr, right)
++        qp.drawPixmap(rect.topLeft(), self.fin_cache[key])
++
++    def paint_center(self, qp, state, alpha, t):
++        if alpha <= 0.01 or state == RUNNING:
++            return
++        u, W, H = self.u, self.width(), self.height()
++        cy = H * 0.5
++        qp.save()
++        qp.setOpacity(alpha)
++        white, dim = QColor(240, 238, 236), QColor(150, 145, 142)
++        if state == WAITING:
++            self.paint_controller_icon(qp, QPointF(W / 2, cy - 11 * u), 7 * u, t)
++            qp.setPen(white)
++            qp.setFont(self.font(4.6 * u, QFont.Weight.DemiBold))
++            qp.drawText(QRectF(0, cy - 3 * u, W, 7 * u), Qt.AlignmentFlag.AlignCenter, "No Controller Recognized")
++            qp.setPen(dim)
++            qp.setFont(self.font(2.4 * u))
++            qp.drawText(QRectF(0, cy + 4 * u, W, 4 * u), Qt.AlignmentFlag.AlignCenter, "Plug in a DJ controller supported by BiteDJ")
++            # three breathing dots
++            for i in range(3):
++                a = 0.25 + 0.75 * max(0.0, math.sin(t * 3.0 - i * 0.7))
++                qp.setBrush(QColor(157, 85, 226, int(255 * a)))
++                qp.setPen(Qt.PenStyle.NoPen)
++                qp.drawEllipse(QPointF(W / 2 + (i - 1) * 3 * u, cy + 11 * u), 0.7 * u, 0.7 * u)
++        else:
++            name = self.controller[0] if self.controller else ""
++            self.paint_check(qp, QPointF(W / 2, cy - 12 * u), 4 * u)
++            qp.setPen(white)
++            qp.setFont(self.font(4.6 * u, QFont.Weight.DemiBold))
++            qp.drawText(QRectF(0, cy - 6 * u, W, 7 * u), Qt.AlignmentFlag.AlignCenter, "Controller Recognized")
++            qp.setPen(dim)
++            qp.setFont(self.font(2.6 * u))
++            qp.drawText(QRectF(0, cy + 0.5 * u, W, 4 * u), Qt.AlignmentFlag.AlignCenter, name)
++            r = self.button_rect()
++            glow = 0.5 + 0.5 * math.sin(t * 2.2)
++            for i in range(4, 0, -1):                       # soft purple glow
++                qp.setPen(Qt.PenStyle.NoPen)
++                qp.setBrush(QColor(157, 85, 226, int(14 * glow * (5 - i))))
++                qp.drawRoundedRect(r.adjusted(-i * 0.6 * u, -i * 0.6 * u, i * 0.6 * u, i * 0.6 * u), r.height() / 2 + i, r.height() / 2 + i)
++            qp.setBrush(QColor("#7b3fc0") if self.pressed else QColor(PURPLE))
++            qp.drawRoundedRect(r, r.height() / 2, r.height() / 2)
++            qp.setPen(QColor("white"))
++            qp.setFont(self.font(3.4 * u, QFont.Weight.Bold, 0.5))
++            qp.drawText(r, Qt.AlignmentFlag.AlignCenter, "Launch")
++        if self.message:
++            qp.setPen(QColor(ORANGE))
++            qp.setFont(self.font(2.2 * u))
++            qp.drawText(QRectF(0, cy + 18.5 * u, W, 4 * u), Qt.AlignmentFlag.AlignCenter, self.message)
++        qp.restore()
++
++    def paint_controller_icon(self, qp, c, s, t):
++        """Simple two-platter DJ controller outline with a pulsing USB lead."""
++        qp.save()
++        pen = QPen(QColor(120, 115, 112), max(2.0, s * 0.07))
++        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
++        qp.setPen(pen)
++        qp.setBrush(Qt.BrushStyle.NoBrush)
++        body = QRectF(c.x() - s * 1.1, c.y() - s * 0.45, s * 2.2, s * 0.9)
++        qp.drawRoundedRect(body, s * 0.14, s * 0.14)
++        for dx in (-0.62, 0.62):
++            qp.drawEllipse(QPointF(c.x() + dx * s, c.y()), s * 0.28, s * 0.28)
++        qp.drawLine(QPointF(c.x(), c.y() - s * 0.25), QPointF(c.x(), c.y() + s * 0.25))
++        a = 0.35 + 0.65 * (0.5 + 0.5 * math.sin(t * 3.0))
++        pen.setColor(QColor(157, 85, 226, int(255 * a)))
++        qp.setPen(pen)
++        path = QPainterPath(QPointF(c.x(), body.top()))
++        path.cubicTo(c.x(), body.top() - s * 0.35, c.x() + s * 0.5, body.top() - s * 0.25, c.x() + s * 0.5, body.top() - s * 0.6)
++        qp.drawPath(path)
++        qp.restore()
++
++    def paint_check(self, qp, c, r):
++        qp.save()
++        qp.setPen(QPen(QColor(BLUE), r * 0.14))
++        qp.setBrush(Qt.BrushStyle.NoBrush)
++        qp.drawEllipse(c, r, r)
++        pen = QPen(QColor(BLUE), r * 0.18)
++        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
++        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
++        qp.setPen(pen)
++        p = QPainterPath(QPointF(c.x() - r * 0.45, c.y() + r * 0.02))
++        p.lineTo(c.x() - r * 0.12, c.y() + r * 0.35)
++        p.lineTo(c.x() + r * 0.48, c.y() - r * 0.32)
++        qp.drawPath(p)
++        qp.restore()
++
++    def paint_tray(self, qp):
++        """Right-to-left: clock, Wi-Fi, Ethernet. Every item is centred on one line with equal gaps."""
++        u = self.u
++        fg, off = QColor(225, 222, 220), QColor(95, 90, 88)
++        mid = 3.0 * u                     # shared vertical centre line
++        gap = 2.0 * u                     # space between items
++        icon = 2.6 * u                    # icon box (square)
++        x = self.width() - 2.4 * u        # right margin
++        qp.save()
++        qp.setFont(self.font(2.3 * u, QFont.Weight.Medium))
++        now = time.strftime(self.conf.get("BITEDJ_CLOCK_FORMAT", "%-I:%M %p"))
++        tw = QFontMetrics(qp.font()).horizontalAdvance(now)
++        qp.setPen(fg)
++        qp.drawText(QRectF(x - tw, mid - 2 * u, tw, 4 * u), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, now)
++        x -= tw + gap
++
++        # Wi-Fi: three arcs plus a dot, lit by signal strength, red cross when disconnected
++        box = QRectF(x - icon, mid - icon / 2, icon, icon)
++        n = self.net
++        bars = 0 if not n.wifi_up else 1 + (n.wifi_signal > 30) + (n.wifi_signal > 55) + (n.wifi_signal > 75)
++        pen = QPen(off, max(1.6, 0.26 * u))
++        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
++        cx, cy = box.center().x(), box.bottom() - icon * 0.12
++        for i in range(1, 4):
++            pen.setColor(fg if bars > i else off)
++            qp.setPen(pen)
++            rr = icon * 0.28 * i
++            qp.drawArc(QRectF(cx - rr, cy - rr, 2 * rr, 2 * rr), 45 * 16, 90 * 16)
++        qp.setPen(Qt.PenStyle.NoPen)
++        qp.setBrush(fg if bars else off)
++        qp.drawEllipse(QPointF(cx, cy - icon * 0.02), icon * 0.08, icon * 0.08)
++        if n.wifi_iface and not n.wifi_up:
++            pen.setColor(QColor(RED))
++            qp.setPen(pen)
++            k = icon * 0.16
++            c = QPointF(box.right() - k, box.bottom() - k)
++            qp.drawLine(c + QPointF(-k, -k), c + QPointF(k, k))
++            qp.drawLine(c + QPointF(k, -k), c + QPointF(-k, k))
++        x -= icon + gap
++
++        # Ethernet: one box on top linked to two below, lit when a cable is connected
++        box = QRectF(x - icon, mid - icon / 2, icon, icon)
++        pen = QPen(fg if n.eth_up else off, max(1.4, 0.2 * u))
++        qp.setPen(pen)
++        qp.setBrush(Qt.BrushStyle.NoBrush)
++        bw, bh = icon * 0.34, icon * 0.26
++        top = QRectF(box.center().x() - bw / 2, box.top() + icon * 0.06, bw, bh)
++        left = QRectF(box.left() + icon * 0.04, box.bottom() - bh - icon * 0.06, bw, bh)
++        right = QRectF(box.right() - bw - icon * 0.04, left.top(), bw, bh)
++        for r in (top, left, right):
++            qp.drawRoundedRect(r, 1.5, 1.5)
++        bus = box.center().y() + icon * 0.04
++        qp.drawLine(QPointF(top.center().x(), top.bottom()), QPointF(top.center().x(), bus))
++        qp.drawLine(QPointF(left.center().x(), bus), QPointF(right.center().x(), bus))
++        for r in (left, right):
++            qp.drawLine(QPointF(r.center().x(), bus), QPointF(r.center().x(), r.top()))
++        qp.restore()
++
++    def net_panel_rect(self):
++        u = self.u
++        w, h = 40 * u, 21 * u
++        return QRectF(self.width() - w - 1.5 * u, 6.5 * u, w, h)
++
++    def paint_net_panel(self, qp):
++        u = self.u
++        r = self.net_panel_rect()
++        qp.save()
++        qp.setPen(QPen(QColor(60, 56, 54), 1))
++        qp.setBrush(QColor(18, 16, 17, 245))
++        qp.drawRoundedRect(r, 1.4 * u, 1.4 * u)
++        n = self.net
++        wifi = (f"{n.ssid or 'Connected'}  \u00b7  {n.wifi_signal}%" if n.wifi_up else ("Not connected" if n.wifi_iface else "No Wi-Fi adapter"))
++        rows = [("Wi-Fi", wifi), ("Ethernet", "Connected" if n.eth_up else "Unplugged"),
++                ("IP address", n.wifi_ip or n.eth_ip or "\u2014"), ("Hostname", socket.gethostname())]
++        y = r.top() + 2 * u
++        for k, v in rows:
++            qp.setFont(self.font(1.9 * u))
++            qp.setPen(QColor(140, 135, 132))
++            qp.drawText(QRectF(r.left() + 2.2 * u, y, 14 * u, 4 * u), Qt.AlignmentFlag.AlignVCenter, k)
++            qp.setFont(self.font(2.1 * u, QFont.Weight.Medium))
++            qp.setPen(QColor(235, 232, 230))
++            qp.drawText(QRectF(r.left() + 15 * u, y, r.width() - 17 * u, 4 * u), Qt.AlignmentFlag.AlignVCenter, v)
++            y += 4.3 * u
++        qp.restore()
++
++    # ---------------------------------------------------------------- input (touch arrives as mouse events)
++    def mousePressEvent(self, e):
++        p = e.position()
++        if self.state == RECOGNIZED and self.button_rect().contains(p):
++            self.pressed = True
++            self.update(self.button_rect().toAlignedRect().adjusted(-40, -40, 40, 40))
++
++    def mouseReleaseEvent(self, e):
++        p = e.position()
++        was = self.pressed
++        self.pressed = False
++        if was:
++            self.update(self.button_rect().toAlignedRect().adjusted(-40, -40, 40, 40))
++            if self.button_rect().contains(p):
++                self.launch()
++            return
++        if self.tray_rect().contains(p.toPoint()):
++            self.net_open = not self.net_open
++            self.refresh_net()
++        elif self.net_open:
++            self.net_open = False
++        self.update()
++
++    def keyPressEvent(self, e):
++        mods = e.modifiers()
++        if e.key() == Qt.Key.Key_Q and mods & Qt.KeyboardModifier.ControlModifier and mods & Qt.KeyboardModifier.AltModifier:
++            QApplication.quit()
++        elif e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self.state == RECOGNIZED:
++            self.launch()
++
++
++def render_icon(path, size=256):
++    """App icon: the striped fin on a black rounded tile."""
++    img = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
++    img.fill(Qt.GlobalColor.transparent)
++    qp = QPainter(img)
++    qp.setRenderHint(QPainter.RenderHint.Antialiasing)
++    qp.setBrush(QColor("#000000"))
++    qp.setPen(QPen(QColor(60, 56, 54), size * 0.012))
++    qp.drawRoundedRect(QRectF(size * 0.03, size * 0.03, size * 0.94, size * 0.94), size * 0.2, size * 0.2)
++    fh, fw = size * 0.62, size * 0.62 * 1.3
++    qp.setClipRect(QRectF(0, 0, size, size * 0.80))
++    qp.drawPixmap(QPointF((size - fw) / 2, size * 0.80 - fh * 0.94), render_fin(fw, fh, 1.0, True))
++    qp.setClipping(False)
++    qp.setPen(QPen(QColor(PURPLE), size * 0.025, cap=Qt.PenCapStyle.RoundCap))
++    qp.drawLine(QPointF(size * 0.18, size * 0.80), QPointF(size * 0.82, size * 0.80))
++    qp.end()
++    img.save(path)
++
++
++def main():
++    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
++    ap.add_argument("--windowed", action="store_true", help="run in a 1280x800 window (testing on a PC)")
++    ap.add_argument("--demo-controller", action="store_true", help="pretend a DDJ-FLX4 is connected")
++    ap.add_argument("--snapshot", metavar="PNG", help="render one frame to a PNG and exit")
++    ap.add_argument("--at", type=float, default=4.0, help="animation time (s) for --snapshot")
++    ap.add_argument("--size", default="1280x800", help="window/snapshot size")
++    ap.add_argument("--icon", metavar="PNG", help="write the app icon to a PNG and exit")
++    ap.add_argument("--list-controllers", action="store_true", help="print supported controllers and what is plugged in")
++    args = ap.parse_args()
++    conf = load_conf()
++
++    if args.icon:
++        app = QGuiApplication(sys.argv)  # noqa: F841 (needed for QPainter)
++        render_icon(args.icon)
++        return
++
++    if args.list_controllers:
++        dirs = controller_dirs(conf)
++        cat = ControllerCatalog(dirs)
++        print(f"{len(cat.entries)} BiteDJ mappings loaded")
++        devs = connected_devices()
++        for label, usb in devs:
++            print("  device:", label, "" if not usb else "%04x:%04x" % usb)
++        print("match:", cat.match(devs))
++        return
++
++    if not args.snapshot:
++        lock = open(f"/tmp/bitedj-launcher-{os.getuid()}.lock", "w")
++        try:
++            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
++        except OSError:
++            print("Bite Launcher is already running")
++            return
++        main.lock = lock          # keep the lock for the life of the process
++
++    QGuiApplication.setDesktopFileName("bitedj-launcher")      # Wayland app_id for labwc window rules
++    app = QApplication(sys.argv)
++    app.setApplicationName("Bite Launcher")
++    w = Desktop(args, conf)
++    sw, sh = (int(v) for v in args.size.lower().split("x"))
++    if args.snapshot:
++        w.resize(sw, sh)
++        w.clock.elapsed = lambda: int(args.at * 1000)
++        w.fade = 1.0
++        if os.environ.get("BITEDJ_SNAPSHOT_NET"):
++            w.net.wifi_iface, w.net.wifi_up, w.net.wifi_signal, w.net.ssid = "wlan0", True, 78, "StudioNet"
++            w.net.eth_iface, w.net.eth_up, w.net.wifi_ip = "eth0", False, "192.168.1.42"
++            w.net_open = os.environ.get("BITEDJ_SNAPSHOT_NET") == "open"
++        w.grab().save(args.snapshot)
++        return
++    if args.windowed:
++        w.resize(sw, sh)
++        w.show()
++    else:
++        # labwc's rc.xml rule fullscreens every new window; asking again would toggle it back.
++        w.showFullScreen() if "labwc" not in os.environ.get("XDG_CURRENT_DESKTOP", "").lower() else w.show()
++        QTimer.singleShot(1500, lambda: w.isFullScreen() or w.showFullScreen())
++    sys.exit(app.exec())
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/stage-mixxx/03-kiosk/files/djrig.conf b/stage-mixxx/03-kiosk/files/djrig.conf
+index e8acf5b..fa98193 100644
+--- a/stage-mixxx/03-kiosk/files/djrig.conf
++++ b/stage-mixxx/03-kiosk/files/djrig.conf
+@@ -6,3 +6,9 @@ DJRIG_QPA=wayland         # wayland | xcb (try xcb if touch or GL misbehaves)
+ DJRIG_OUTPUT=HDMI-A-1     # DSI panels: DSI-1
+ DJRIG_MODE=1280x800
+ DJRIG_ROTATE=normal       # normal | 90 | 180 | 270
++
++# --- BiteDJ Launcher ---
++BITEDJ_LAUNCHER_AUTOLAUNCH=0      # 1 = start BiteDJ on its own once a controller is recognized
++BITEDJ_FIN_SECONDS=30             # seconds for the shark fin to cross the screen (slow, Jaws-like)
++BITEDJ_CLOCK_FORMAT=%-I:%M %p     # 24-hour clock: %H:%M
++#BITEDJ_CONTROLLER_DIRS=/opt/bitedj/share/mixxx/controllers   # override mapping folders (colon-separated)
