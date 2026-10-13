@@ -345,10 +345,10 @@ index 0000000..47d47ef
 +done
 diff --git a/stage-mixxx/03-kiosk/files/bitedj_launcher.py b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
 new file mode 100755
-index 0000000..b38beeb
+index 0000000..15be7c4
 --- /dev/null
 +++ b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
-@@ -0,0 +1,908 @@
+@@ -0,0 +1,910 @@
 +#!/usr/bin/env python3
 +"""BiteDJ Launcher - a minimal, black, touch-first home screen for the Raspberry Pi DJ rig.
 +
@@ -698,7 +698,9 @@ index 0000000..b38beeb
 +        self.fin_cache = {}
 +        self.fin_rect = QRect()
 +
-+        self.anim = QTimer(self, interval=16, timerType=Qt.TimerType.PreciseTimer)
++        # 30 fps is smooth for a slow-gliding fin and uses about half the CPU of 60 fps
++        fps = max(10, min(60, int(conf.get("BITEDJ_FPS", "30") or 30)))
++        self.anim = QTimer(self, interval=round(1000 / fps), timerType=Qt.TimerType.PreciseTimer)
 +        self.anim.timeout.connect(self.tick)
 +        self.anim.start()
 +        self.poll = QTimer(self, interval=1500)
@@ -886,7 +888,7 @@ index 0000000..b38beeb
 +        if self.state == RUNNING and self.fade >= 1.0:
 +            return       # BiteDJ is on screen: spend zero CPU here
 +        if self.fade < 1.0:
-+            self.fade = min(1.0, self.fade + 0.016 / 0.35)
++            self.fade = min(1.0, self.fade + self.anim.interval() / 1000 / 0.35)   # 0.35 s crossfade
 +        self.update(self.center_rect())
 +        new = self.fin_geometry()[0]
 +        self.update(self.fin_rect.united(new).adjusted(-2, -2, 2, 2))
@@ -1258,10 +1260,10 @@ index 0000000..b38beeb
 +if __name__ == "__main__":
 +    main()
 diff --git a/stage-mixxx/03-kiosk/files/djrig.conf b/stage-mixxx/03-kiosk/files/djrig.conf
-index e8acf5b..b15b17c 100644
+index e8acf5b..67b2301 100644
 --- a/stage-mixxx/03-kiosk/files/djrig.conf
 +++ b/stage-mixxx/03-kiosk/files/djrig.conf
-@@ -6,3 +6,11 @@ DJRIG_QPA=wayland         # wayland | xcb (try xcb if touch or GL misbehaves)
+@@ -6,3 +6,12 @@ DJRIG_QPA=wayland         # wayland | xcb (try xcb if touch or GL misbehaves)
  DJRIG_OUTPUT=HDMI-A-1     # DSI panels: DSI-1
  DJRIG_MODE=1280x800
  DJRIG_ROTATE=normal       # normal | 90 | 180 | 270
@@ -1270,6 +1272,7 @@ index e8acf5b..b15b17c 100644
 +#BITEDJ_APP=~/bitedj/build/mixxx          # what Launch runs (this is the default)
 +#BITEDJ_APP_ARGS=--fullScreen             # arguments for it
 +BITEDJ_LAUNCHER_AUTOLAUNCH=0      # 1 = start BiteDJ on its own once a controller is recognized
++BITEDJ_FPS=30                     # animation frame rate (30 = light on CPU, 60 = smoothest)
 +BITEDJ_FIN_SECONDS=30             # seconds for the shark fin to cross the screen (slow, Jaws-like)
 +BITEDJ_CLOCK_FORMAT=%-I:%M %p     # 24-hour clock: %H:%M
 +#BITEDJ_CONTROLLER_DIRS=/opt/bitedj/share/mixxx/controllers   # override mapping folders (colon-separated)

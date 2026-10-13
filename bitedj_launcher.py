@@ -347,7 +347,9 @@ class Desktop(QWidget):
         self.fin_cache = {}
         self.fin_rect = QRect()
 
-        self.anim = QTimer(self, interval=16, timerType=Qt.TimerType.PreciseTimer)
+        # 30 fps is smooth for a slow-gliding fin and uses about half the CPU of 60 fps
+        fps = max(10, min(60, int(conf.get("BITEDJ_FPS", "30") or 30)))
+        self.anim = QTimer(self, interval=round(1000 / fps), timerType=Qt.TimerType.PreciseTimer)
         self.anim.timeout.connect(self.tick)
         self.anim.start()
         self.poll = QTimer(self, interval=1500)
@@ -535,7 +537,7 @@ class Desktop(QWidget):
         if self.state == RUNNING and self.fade >= 1.0:
             return       # BiteDJ is on screen: spend zero CPU here
         if self.fade < 1.0:
-            self.fade = min(1.0, self.fade + 0.016 / 0.35)
+            self.fade = min(1.0, self.fade + self.anim.interval() / 1000 / 0.35)   # 0.35 s crossfade
         self.update(self.center_rect())
         new = self.fin_geometry()[0]
         self.update(self.fin_rect.united(new).adjusted(-2, -2, 2, 2))

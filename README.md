@@ -104,6 +104,7 @@ It adds `python3-pyqt6` to the base packages, puts the launcher, icon and shortc
 | `DJRIG_BITEDJ_SCALE` | (unset) | Optional `QT_SCALE_FACTOR` for BiteDJ. Not set means the same scaling as the desktop entry |
 | `DJRIG_QPA` | (unset) | Optional Qt platform for BiteDJ |
 | `BITEDJ_LAUNCHER_AUTOLAUNCH` | `0` | `1` = start BiteDJ by itself about a second after a controller is recognized |
+| `BITEDJ_FPS` | `30` | Animation frame rate. 30 is light on CPU; 60 is the smoothest |
 | `BITEDJ_FIN_SECONDS` | `30` | Seconds for the fin to cross the screen |
 | `BITEDJ_CLOCK_FORMAT` | `%-I:%M %p` | Clock format (`%H:%M` for 24-hour) |
 | `BITEDJ_CONTROLLER_DIRS` | (auto) | Mapping folders to search, separated by colons |
