@@ -1253,7 +1253,7 @@ index 0000000..b38beeb
 +if __name__ == "__main__":
 +    main()
 diff --git a/stage-mixxx/03-kiosk/files/djrig.conf b/stage-mixxx/03-kiosk/files/djrig.conf
-index e8acf5b..823d1a2 100644
+index e8acf5b..b15b17c 100644
 --- a/stage-mixxx/03-kiosk/files/djrig.conf
 +++ b/stage-mixxx/03-kiosk/files/djrig.conf
 @@ -6,3 +6,11 @@ DJRIG_QPA=wayland         # wayland | xcb (try xcb if touch or GL misbehaves)
@@ -1262,7 +1262,7 @@ index e8acf5b..823d1a2 100644
  DJRIG_ROTATE=normal       # normal | 90 | 180 | 270
 +
 +# --- BiteDJ Launcher ---
-+#BITEDJ_APP=/home/xdj/bitedj/build/mixxx   # what Launch runs (default: ~/bitedj/build/mixxx)
++#BITEDJ_APP=~/bitedj/build/mixxx          # what Launch runs (this is the default)
 +#BITEDJ_APP_ARGS=--fullScreen             # arguments for it
 +BITEDJ_LAUNCHER_AUTOLAUNCH=0      # 1 = start BiteDJ on its own once a controller is recognized
 +BITEDJ_FIN_SECONDS=30             # seconds for the shark fin to cross the screen (slow, Jaws-like)
