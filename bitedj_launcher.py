@@ -339,6 +339,8 @@ class Desktop(QWidget):
         self.proc = None
         self.launch_started = 0.0
         self.external_running = False
+        self.switching = False            # "Opening Pi Desktop..." screen while bite-mode takes over
+        self.switch_pressed = False
 
         self.clock = QElapsedTimer()
         self.clock.start()
@@ -454,6 +456,28 @@ class Desktop(QWidget):
                     return int(pid)
         return None
 
+    def bite_mode_cmd(self):
+        """bite-mode ships with BiteDJ-On-Off-Macro-with-FLX4 (installed to ~/bin)."""
+        for cand in (self.conf.get("BITE_MODE", ""), os.path.expanduser("~/bin/bite-mode"), "/usr/local/bin/bite-mode"):
+            if cand and os.access(os.path.expanduser(cand), os.X_OK):
+                return os.path.expanduser(cand)
+        return None
+
+    def switch_to_desktop(self):
+        cmd = self.bite_mode_cmd()
+        self.net_open = False
+        if not cmd:
+            self.message = "Mode switch not installed: install BiteDJ-On-Off-Macro-with-FLX4"
+            self.update()
+            return
+        self.switching = True
+        self.update()
+        # Detached: bite-mode closes this launcher as part of the switch
+        if not QProcess.startDetached(cmd, ["desktop"]):
+            self.switching = False
+            self.message = "Couldn't start bite-mode"
+        self.update()
+
     def launch(self):
         if self.state == RUNNING or self.proc is not None:
             return
@@ -522,6 +546,12 @@ class Desktop(QWidget):
         qp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         qp.fillRect(ev.rect(), Qt.GlobalColor.black)
         if self.state == RUNNING and self.fade >= 1.0:
+            return
+        if self.switching:
+            u = self.u
+            qp.setPen(QColor(150, 145, 142))
+            qp.setFont(self.font(3.0 * u, QFont.Weight.Medium))
+            qp.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Opening Pi Desktop\u2026")
             return
         self.paint_tray(qp)
         t = self.clock.elapsed() / 1000.0
@@ -684,8 +714,13 @@ class Desktop(QWidget):
 
     def net_panel_rect(self):
         u = self.u
-        w, h = 40 * u, 21 * u
+        w, h = 40 * u, 34 * u
         return QRectF(self.width() - w - 1.5 * u, 6.5 * u, w, h)
+
+    def switch_button_rect(self):
+        u = self.u
+        r = self.net_panel_rect()
+        return QRectF(r.left() + 2.2 * u, r.top() + 20.5 * u, r.width() - 4.4 * u, 7 * u)
 
     def paint_net_panel(self, qp):
         u = self.u
@@ -707,11 +742,29 @@ class Desktop(QWidget):
             qp.setPen(QColor(235, 232, 230))
             qp.drawText(QRectF(r.left() + 15 * u, y, r.width() - 17 * u, 4 * u), Qt.AlignmentFlag.AlignVCenter, v)
             y += 4.3 * u
+        # Switch to the regular Raspberry Pi desktop (runs bite-mode desktop)
+        qp.setPen(QPen(QColor(60, 56, 54), 1))
+        qp.drawLine(QPointF(r.left() + 2.2 * u, r.top() + 19 * u), QPointF(r.right() - 2.2 * u, r.top() + 19 * u))
+        b = self.switch_button_rect()
+        qp.setPen(QPen(QColor(120, 115, 112), max(1.0, 0.2 * u)))
+        qp.setBrush(QColor(60, 56, 54) if self.switch_pressed else QColor(30, 28, 29))
+        qp.drawRoundedRect(b, b.height() / 2, b.height() / 2)
+        qp.setPen(QColor(235, 232, 230))
+        qp.setFont(self.font(2.2 * u, QFont.Weight.DemiBold))
+        qp.drawText(b, Qt.AlignmentFlag.AlignCenter, "Switch to Pi Desktop")
+        qp.setPen(QColor(120, 115, 112))
+        qp.setFont(self.font(1.7 * u))
+        qp.drawText(QRectF(r.left(), b.bottom() + 0.6 * u, r.width(), 3.5 * u), Qt.AlignmentFlag.AlignCenter,
+                    "or hold both 4 BEAT/EXIT on the FLX4 for 8 s")
         qp.restore()
 
     # ---------------------------------------------------------------- input (touch arrives as mouse events)
     def mousePressEvent(self, e):
         p = e.position()
+        if self.net_open and self.switch_button_rect().contains(p):
+            self.switch_pressed = True
+            self.update(self.net_panel_rect().toAlignedRect().adjusted(-4, -4, 4, 4))
+            return
         if self.state == RECOGNIZED and self.button_rect().contains(p):
             self.pressed = True
             self.update(self.button_rect().toAlignedRect().adjusted(-40, -40, 40, 40))
@@ -720,6 +773,12 @@ class Desktop(QWidget):
         p = e.position()
         was = self.pressed
         self.pressed = False
+        if self.switch_pressed:
+            self.switch_pressed = False
+            if self.net_open and self.switch_button_rect().contains(p):
+                self.switch_to_desktop()
+            self.update()
+            return
         if was:
             self.update(self.button_rect().toAlignedRect().adjusted(-40, -40, 40, 40))
             if self.button_rect().contains(p):
@@ -728,7 +787,7 @@ class Desktop(QWidget):
         if self.tray_rect().contains(p.toPoint()):
             self.net_open = not self.net_open
             self.refresh_net()
-        elif self.net_open:
+        elif self.net_open and not self.net_panel_rect().contains(p):
             self.net_open = False
         self.update()
 
@@ -736,6 +795,8 @@ class Desktop(QWidget):
         mods = e.modifiers()
         if e.key() == Qt.Key.Key_Q and mods & Qt.KeyboardModifier.ControlModifier and mods & Qt.KeyboardModifier.AltModifier:
             QApplication.quit()
+        elif e.key() == Qt.Key.Key_D and mods & Qt.KeyboardModifier.ControlModifier and mods & Qt.KeyboardModifier.AltModifier:
+            self.switch_to_desktop()
         elif e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self.state == RECOGNIZED:
             self.launch()
 
@@ -815,7 +876,9 @@ def main():
         w.show()
     else:
         # labwc's rc.xml rule fullscreens every new window; asking again would toggle it back.
-        w.showFullScreen() if "labwc" not in os.environ.get("XDG_CURRENT_DESKTOP", "").lower() else w.show()
+        rc = read(os.path.expanduser("~/.config/labwc/rc.xml"))
+        kiosk_rule = 'identifier="*"' in rc and "ToggleFullscreen" in rc
+        w.show() if kiosk_rule else w.showFullScreen()
         QTimer.singleShot(1500, lambda: w.isFullScreen() or w.showFullScreen())
     sys.exit(app.exec())
 

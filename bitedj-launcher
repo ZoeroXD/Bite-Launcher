@@ -1,7 +1,8 @@
 #!/bin/sh
-# Keeps the BiteDJ Launcher on screen; restarts it if it ever exits or crashes.
+# Keeps the Bite Launcher on screen; restarts it if it exits or crashes.
+# Stops when the labwc session it belongs to ends (e.g. after switching to the Pi Desktop).
 export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-wayland}
-while true; do
+while [ -z "$LABWC_PID" ] || kill -0 "$LABWC_PID" 2>/dev/null; do
   python3 /opt/bitedj-launcher/bitedj_launcher.py "$@"
   sleep 1
 done
