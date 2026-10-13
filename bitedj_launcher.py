@@ -431,14 +431,32 @@ class Desktop(QWidget):
                 self.update(self.net_panel_rect().toAlignedRect().adjusted(-4, -4, 4, 4))
 
     def app_cmd(self):
-        app = self.conf.get("DJRIG_APP", "bitedj")
-        for cand in (app, "/usr/local/bin/bitedj", "/opt/bitedj/bin/bitedj", "/opt/bitedj/bin/mixxx",
-                     os.path.expanduser("~/bitedj/build/mixxx"), "mixxx"):
-            path = cand if os.path.isabs(cand) else next((os.path.join(d, cand) for d in os.environ.get("PATH", "").split(":")
-                                                         if os.access(os.path.join(d, cand), os.X_OK)), None)
-            if path and os.access(path, os.X_OK):
+        """The program the Launch button runs.
+
+        Same as the BiteDJ desktop entry and the FLX4 hold macro: ~/bitedj/build/mixxx --fullScreen.
+        Set BITEDJ_APP (or DJRIG_APP) in /etc/djrig.conf to a full path to use something else.
+        """
+        def resolve(c):
+            c = os.path.expanduser(c or "")
+            if not c:
+                return None
+            if os.path.isabs(c):
+                return c if os.access(c, os.X_OK) else None
+            return next((os.path.join(d, c) for d in os.environ.get("PATH", "").split(":")
+                         if os.access(os.path.join(d, c), os.X_OK)), None)
+        for key in ("BITEDJ_APP", "DJRIG_APP"):
+            v = self.conf.get(key, "")
+            if os.path.isabs(os.path.expanduser(v)) and resolve(v):
+                return resolve(v)
+        for cand in ("~/bitedj/build/mixxx", self.conf.get("DJRIG_APP", ""), "/usr/local/bin/bitedj",
+                     "/opt/bitedj/bin/bitedj", "/opt/bitedj/bin/mixxx", "mixxx"):
+            path = resolve(cand)
+            if path:
                 return path
         return None
+
+    def app_args(self):
+        return shlex.split(self.conf.get("BITEDJ_APP_ARGS", "--fullScreen"))
 
     def bitedj_pid(self):
         cmd = self.app_cmd()
@@ -486,19 +504,22 @@ class Desktop(QWidget):
             self.message = "BiteDJ is not installed"
             self.update()
             return
+        # Same environment as the desktop entry; extra Qt settings only if set in /etc/djrig.conf
         env = QProcessEnvironment.systemEnvironment()
-        env.insert("QT_QPA_PLATFORM", self.conf.get("DJRIG_QPA", "wayland"))
-        if "mixxx" not in os.path.basename(os.path.realpath(cmd)) or "bitedj" in cmd:
-            env.insert("QT_SCALE_FACTOR", self.conf.get("DJRIG_BITEDJ_SCALE", "1.6"))
+        env.remove("QT_QPA_PLATFORM")          # the launcher's own setting must not leak into BiteDJ
+        if self.conf.get("DJRIG_QPA"):
+            env.insert("QT_QPA_PLATFORM", self.conf["DJRIG_QPA"])
+        if self.conf.get("DJRIG_BITEDJ_SCALE"):
+            env.insert("QT_SCALE_FACTOR", self.conf["DJRIG_BITEDJ_SCALE"])
         self.proc = QProcess(self)
         self.proc.setProcessEnvironment(env)
-        self.proc.setWorkingDirectory(os.path.dirname(os.path.realpath(cmd)))
+        self.proc.setWorkingDirectory(os.path.dirname(cmd))   # BiteDJ's build folder, like the hold macro
         self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.ForwardedChannels)
         self.proc.finished.connect(self.on_finished)
         self.proc.errorOccurred.connect(lambda e: e == QProcess.ProcessError.FailedToStart and self.on_finished(-1, None))
         self.message = ""
         self.launch_started = time.monotonic()
-        self.proc.start(cmd, ["--fullScreen"])
+        self.proc.start(cmd, self.app_args())
         self.set_state(RUNNING)
 
     def on_finished(self, code, _status):

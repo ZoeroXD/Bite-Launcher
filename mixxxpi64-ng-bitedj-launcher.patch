@@ -340,10 +340,10 @@ index 0000000..47d47ef
 +done
 diff --git a/stage-mixxx/03-kiosk/files/bitedj_launcher.py b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
 new file mode 100755
-index 0000000..1155dc9
+index 0000000..b38beeb
 --- /dev/null
 +++ b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
-@@ -0,0 +1,887 @@
+@@ -0,0 +1,908 @@
 +#!/usr/bin/env python3
 +"""BiteDJ Launcher - a minimal, black, touch-first home screen for the Raspberry Pi DJ rig.
 +
@@ -777,14 +777,32 @@ index 0000000..1155dc9
 +                self.update(self.net_panel_rect().toAlignedRect().adjusted(-4, -4, 4, 4))
 +
 +    def app_cmd(self):
-+        app = self.conf.get("DJRIG_APP", "bitedj")
-+        for cand in (app, "/usr/local/bin/bitedj", "/opt/bitedj/bin/bitedj", "/opt/bitedj/bin/mixxx",
-+                     os.path.expanduser("~/bitedj/build/mixxx"), "mixxx"):
-+            path = cand if os.path.isabs(cand) else next((os.path.join(d, cand) for d in os.environ.get("PATH", "").split(":")
-+                                                         if os.access(os.path.join(d, cand), os.X_OK)), None)
-+            if path and os.access(path, os.X_OK):
++        """The program the Launch button runs.
++
++        Same as the BiteDJ desktop entry and the FLX4 hold macro: ~/bitedj/build/mixxx --fullScreen.
++        Set BITEDJ_APP (or DJRIG_APP) in /etc/djrig.conf to a full path to use something else.
++        """
++        def resolve(c):
++            c = os.path.expanduser(c or "")
++            if not c:
++                return None
++            if os.path.isabs(c):
++                return c if os.access(c, os.X_OK) else None
++            return next((os.path.join(d, c) for d in os.environ.get("PATH", "").split(":")
++                         if os.access(os.path.join(d, c), os.X_OK)), None)
++        for key in ("BITEDJ_APP", "DJRIG_APP"):
++            v = self.conf.get(key, "")
++            if os.path.isabs(os.path.expanduser(v)) and resolve(v):
++                return resolve(v)
++        for cand in ("~/bitedj/build/mixxx", self.conf.get("DJRIG_APP", ""), "/usr/local/bin/bitedj",
++                     "/opt/bitedj/bin/bitedj", "/opt/bitedj/bin/mixxx", "mixxx"):
++            path = resolve(cand)
++            if path:
 +                return path
 +        return None
++
++    def app_args(self):
++        return shlex.split(self.conf.get("BITEDJ_APP_ARGS", "--fullScreen"))
 +
 +    def bitedj_pid(self):
 +        cmd = self.app_cmd()
@@ -832,19 +850,22 @@ index 0000000..1155dc9
 +            self.message = "BiteDJ is not installed"
 +            self.update()
 +            return
++        # Same environment as the desktop entry; extra Qt settings only if set in /etc/djrig.conf
 +        env = QProcessEnvironment.systemEnvironment()
-+        env.insert("QT_QPA_PLATFORM", self.conf.get("DJRIG_QPA", "wayland"))
-+        if "mixxx" not in os.path.basename(os.path.realpath(cmd)) or "bitedj" in cmd:
-+            env.insert("QT_SCALE_FACTOR", self.conf.get("DJRIG_BITEDJ_SCALE", "1.6"))
++        env.remove("QT_QPA_PLATFORM")          # the launcher's own setting must not leak into BiteDJ
++        if self.conf.get("DJRIG_QPA"):
++            env.insert("QT_QPA_PLATFORM", self.conf["DJRIG_QPA"])
++        if self.conf.get("DJRIG_BITEDJ_SCALE"):
++            env.insert("QT_SCALE_FACTOR", self.conf["DJRIG_BITEDJ_SCALE"])
 +        self.proc = QProcess(self)
 +        self.proc.setProcessEnvironment(env)
-+        self.proc.setWorkingDirectory(os.path.dirname(os.path.realpath(cmd)))
++        self.proc.setWorkingDirectory(os.path.dirname(cmd))   # BiteDJ's build folder, like the hold macro
 +        self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.ForwardedChannels)
 +        self.proc.finished.connect(self.on_finished)
 +        self.proc.errorOccurred.connect(lambda e: e == QProcess.ProcessError.FailedToStart and self.on_finished(-1, None))
 +        self.message = ""
 +        self.launch_started = time.monotonic()
-+        self.proc.start(cmd, ["--fullScreen"])
++        self.proc.start(cmd, self.app_args())
 +        self.set_state(RUNNING)
 +
 +    def on_finished(self, code, _status):
@@ -1232,15 +1253,17 @@ index 0000000..1155dc9
 +if __name__ == "__main__":
 +    main()
 diff --git a/stage-mixxx/03-kiosk/files/djrig.conf b/stage-mixxx/03-kiosk/files/djrig.conf
-index e8acf5b..fa98193 100644
+index e8acf5b..823d1a2 100644
 --- a/stage-mixxx/03-kiosk/files/djrig.conf
 +++ b/stage-mixxx/03-kiosk/files/djrig.conf
-@@ -6,3 +6,9 @@ DJRIG_QPA=wayland         # wayland | xcb (try xcb if touch or GL misbehaves)
+@@ -6,3 +6,11 @@ DJRIG_QPA=wayland         # wayland | xcb (try xcb if touch or GL misbehaves)
  DJRIG_OUTPUT=HDMI-A-1     # DSI panels: DSI-1
  DJRIG_MODE=1280x800
  DJRIG_ROTATE=normal       # normal | 90 | 180 | 270
 +
 +# --- BiteDJ Launcher ---
++#BITEDJ_APP=/home/xdj/bitedj/build/mixxx   # what Launch runs (default: ~/bitedj/build/mixxx)
++#BITEDJ_APP_ARGS=--fullScreen             # arguments for it
 +BITEDJ_LAUNCHER_AUTOLAUNCH=0      # 1 = start BiteDJ on its own once a controller is recognized
 +BITEDJ_FIN_SECONDS=30             # seconds for the shark fin to cross the screen (slow, Jaws-like)
 +BITEDJ_CLOCK_FORMAT=%-I:%M %p     # 24-hour clock: %H:%M

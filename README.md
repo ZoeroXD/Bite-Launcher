@@ -1,6 +1,6 @@
 # Bite Launcher
 
-A black, touch-first launcher for the Raspberry Pi 4 DJ rig. It hides the Raspberry Pi desktop, waits until a controller supported by BiteDJ is plugged in, and then shows a purple **Launch** button that starts BiteDJ (or stock Mixxx).
+A black, touch-first launcher for the Raspberry Pi 4 DJ rig. It hides the Raspberry Pi desktop, waits until a controller supported by BiteDJ is plugged in, and then shows a purple **Launch** button that starts BiteDJ with `~/bitedj/build/mixxx --fullScreen`, the same command as the BiteDJ desktop entry.
 
 ![Waiting for a controller](screenshots/1-waiting.png)
 ![Controller recognized](screenshots/2-recognized.png)
@@ -85,9 +85,11 @@ It adds `python3-pyqt6` to the base packages, puts the launcher, icon and shortc
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `DJRIG_APP` | `bitedj` | App started by Launch: `bitedj` or `mixxx` |
-| `DJRIG_BITEDJ_SCALE` | `1.6` | `QT_SCALE_FACTOR` for BiteDJ (same setting as `djrig-launch`) |
-| `DJRIG_QPA` | `wayland` | Qt platform for the DJ app |
+| `BITEDJ_APP` | `~/bitedj/build/mixxx` | What **Launch** runs (same as the BiteDJ desktop entry and the FLX4 hold macro). Use a full path to change it |
+| `BITEDJ_APP_ARGS` | `--fullScreen` | Arguments passed to it |
+| `DJRIG_APP` | (unset) | Used only when `~/bitedj/build/mixxx` doesn't exist, e.g. `bitedj` or `mixxx` on the image build |
+| `DJRIG_BITEDJ_SCALE` | (unset) | Optional `QT_SCALE_FACTOR` for BiteDJ. Not set means the same scaling as the desktop entry |
+| `DJRIG_QPA` | (unset) | Optional Qt platform for BiteDJ |
 | `BITEDJ_LAUNCHER_AUTOLAUNCH` | `0` | `1` = start BiteDJ by itself about a second after a controller is recognized |
 | `BITEDJ_FIN_SECONDS` | `30` | Seconds for the fin to cross the screen |
 | `BITEDJ_CLOCK_FORMAT` | `%-I:%M %p` | Clock format (`%H:%M` for 24-hour) |
@@ -97,7 +99,7 @@ It adds `python3-pyqt6` to the base packages, puts the launcher, icon and shortc
 
 - **While BiteDJ runs,** the launcher stays behind it, stops its animation and network checks, and only does a light check every 1.5 s to see whether BiteDJ is still running, so it uses almost no CPU. When BiteDJ quits, the launcher screen is already there underneath, with no flash of the desktop.
 - **If BiteDJ closes within 20 seconds with an error,** an orange note says so and Launch stays available.
-- **BiteDJ started some other way** (the FLX4 hold-button macro, or SSH) is detected, and the launcher stays out of the way. The detection matches the binary set by `DJRIG_APP` or `/usr/local/bin/bitedj`. If your hold macro still points at `~/bitedj/build/mixxx`, set `DJRIG_APP` to that path so both use the same binary.
+- **BiteDJ started some other way** (the FLX4 hold-button macro, or SSH) is detected, and the launcher stays out of the way. The launcher, the hold macro and `bite-mode` all use `~/bitedj/build/mixxx`, so they always agree on whether BiteDJ is running.
 - **Touch** works as mouse clicks. **Enter or Space** presses Launch. **Ctrl+Alt+D** switches to the Pi desktop. **Ctrl+Alt+Q** quits the launcher (the wrapper restarts it).
 - **Fullscreen:** if `~/.config/labwc/rc.xml` has the kiosk rule that makes every window fullscreen, the launcher leaves it to that rule (asking again would switch it back out). Otherwise, as on the regular Pi desktop, it goes fullscreen by itself.
 
