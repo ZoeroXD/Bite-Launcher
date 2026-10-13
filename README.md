@@ -35,7 +35,7 @@ python3 /opt/bitedj-launcher/bitedj_launcher.py --list-controllers
 ## Install on a running Pi
 
 ```bash
-git clone <this repo> && cd BiteDJ-Launcher
+git clone https://github.com/ZoeroXD/BiteDJ-Launcher.git && cd BiteDJ-Launcher
 ./install.sh
 sudo reboot
 ```
