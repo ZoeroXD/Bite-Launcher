@@ -1,6 +1,6 @@
 # Bite Launcher
 
-Version **1.3.4**: the V3.2 launcher with bundled FLX4 controls, plus installer compatibility checks. The installer never changes boot settings: the Pi starts up exactly like stock Raspberry Pi OS.
+Version **1.3.4**: the V3.2 launcher app with bundled FLX4 controls macros, plus installer compatibility checks. The installer never changes boot settings: the Pi starts up exactly like stock Raspberry Pi OS. <Tired changing the boot sequence and Icons but failed, I left it out>
 
 <p align="center"><img src="bite-launcher.png" width="96" alt="Bite Launcher icon"></p>
 
@@ -129,16 +129,18 @@ This inspects compatibility without installing.
 - **Exact normal-menu footer:** `Press “4 BEAT / EXIT” to disable launcher`.
 - **Saved mode and singleton behavior:** one wrapper/app, persisted autostart choice, desktop shortcut creation at installation, and no shortcut-monitoring daemon.
 
-| Control | Behavior |
+## Controller & Keybord Macros and UI
+
 |---|---|
 | Desktop icon | Always enter launcher mode; enable autostart and reuse a running instance. |
-| Ctrl+Alt+D | Two-way launcher/desktop mode toggle. |
-| Clock hold, eight seconds | One-way desktop exit. Early release cancels. |
+| Ctrl+Alt+D | Two-mode launcher/desktop mode toggle. |
+| Touch and hold time in launcher, eight seconds | One-way desktop exit. Early release cancels. |
 | Switch to Pi Desktop | One-way desktop exit. |
-| Both decks' LOOP IN, three seconds | Directly start BiteDJ; no mode change. |
-| Both decks' LOOP OUT, eight seconds | Stop BiteDJ only; no mode change. |
-| Both decks' 4 BEAT/EXIT, eight seconds | Two-way mode toggle. |
+| Both decks' press and hold LOOP IN, three seconds | Directly start BiteDJ; no mode change. |
+| Both decks' press and hold LOOP OUT, eight seconds | Stop BiteDJ only; no mode change. |
+| Both decks' 4 BEAT/EXIT, eight seconds | Two-mode launcher/desktop mode toggle. |
 | Shut Down / Reboot | Confirm, then request the system action; preserve saved mode. |
+| Tapping time in Launcher | view network settings and buttons to switch to desktop, Reboot, and Restart. |
 
 Desktop exit disables autostart, stops the wrapper first, closes BiteDJ if running, stops the launcher, restores the desktop, and saves desktop mode. Each completed controller hold triggers once; early release cancels.
 
@@ -178,7 +180,12 @@ The optional Wayland test requires Weston in the testing environment, not on the
 The included `mixxxpi64-ng-bitedj-launcher.patch` is the preserved earlier image-build reference, not a verified 1.3.4 image-build release. Use the standalone Downloads installer above for this version.
 
 ## Credits
+AI - Claude 5.5 
+   -That's how I figured out how to install Bite DJ.
+Dollar bills for credit  - ouch - 
+Reach out if there's anything you want to support with.
+
 
 - **BiteDJ:** by [Team Deckshark](https://github.com/TeamDeckshark), in the [TeamDeckshark/bitedj](https://github.com/TeamDeckshark/bitedj) repository. BiteDJ is based on [Mixxx](https://github.com/mixxxdj/mixxx) and distributed under the GNU GPL v2.0.
-- **Icons and artwork:** the Bite DJ name and logo, and the striped bite-mark design used in the launcher icon (`bite-launcher.png`) and the animated fin, are Deckshark's branding. Credit for those designs belongs to Team Deckshark. They're used here only to match the BiteDJ look.
+- **Icons and artwork:** the BiteDJ name and logo, and the striped bite-mark design used in the launcher icon (`bite-launcher.png`) and the animated fin, are Deckshark's branding. Credit for those designs belongs to Team Deckshark. They're used here only to match the BiteDJ look.
 - **Bite Launcher:** the launcher code, installer, and FLX4 macros are community-made by [ZoeroXD](https://github.com/ZoeroXD) for running BiteDJ on a Raspberry Pi.
