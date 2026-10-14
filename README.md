@@ -30,7 +30,7 @@ BiteDJ is Team Deckshark's DJ software, based on [Mixxx](https://github.com/mixx
 ## Quick start
 
 1. **Set up the Pi.** Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to install **Raspberry Pi OS with desktop** (Trixie). Boot it, connect to your network, and turn on SSH if you'll install remotely.
-2. **Build BiteDJ on the Pi.** These are the steps used on MiniTab (Raspberry Pi 4, 4 GB). For anything official, see Team Deckshark's [BiteDJ repository](https://github.com/TeamDeckshark/bitedj).
+2. **Build BiteDJ on the Pi.** These steps were tested on a Raspberry Pi 4 (4 GB). For anything official, see Team Deckshark's [BiteDJ repository](https://github.com/TeamDeckshark/bitedj).
 
    ```bash
    sudo apt update && sudo apt install -y git
@@ -63,20 +63,20 @@ python3 /opt/bitedj-launcher/bitedj_launcher.py --list-controllers
 
 ## Installation from Downloads
 
-Save `BiteDJ-Launcher-1.3.4.zip` in the Pi's `/home/xdj/Downloads` folder. Use the newly delivered ZIP, not an older folder or V3.2 archive. Save and close your DJ work before installation and do not switch modes while installation is running.
+Save `BiteDJ-Launcher-1.3.4.zip` in the Pi's `~/Downloads` folder (for the example user `dj`, that's `/home/dj/Downloads`). Use the newly delivered ZIP, not an older folder or V3.2 archive. Save and close your DJ work before installation and do not switch modes while installation is running.
 
 If you download the ZIP on another computer, run these commands there, not inside the Pi SSH session. This example assumes that computer also saves downloads under `$HOME/Downloads`:
 
 ```bash
-ssh xdj@MiniTab 'mkdir -p "/home/xdj/Downloads"' &&
+ssh dj@raspberrypi.local 'mkdir -p "/home/dj/Downloads"' &&
 scp "$HOME/Downloads/BiteDJ-Launcher-1.3.4.zip" \
-  xdj@MiniTab:/home/xdj/Downloads/ &&
-ssh xdj@MiniTab
+  dj@raspberrypi.local:/home/dj/Downloads/ &&
+ssh dj@raspberrypi.local
 ```
 
-If hostname resolution is unavailable, replace `MiniTab` with the Pi's known IP address. Do not rename an older ZIP to match the new filename.
+Replace `dj` with your Pi's username and `raspberrypi.local` with its hostname, or use its IP address. Do not rename an older ZIP to match the new filename.
 
-Run as the normal user (`xdj`), not as root:
+Run as your normal user (for example `dj`), not as root:
 
 ```bash
 mkdir -p "$HOME/Bite-Launcher-1.3.4" &&
@@ -122,7 +122,7 @@ This inspects compatibility without installing.
 
 - **No supported controller:** `No Controller Recognized`, the helper text `Plug in a DJ controller supported by Bite DJ.`, and no Launch button.
 - **Supported controller:** `Controller Recognized`, controller name, and the existing purple Launch button.
-- **Launch command:** `/home/xdj/bitedj/build/mixxx --fullScreen`. Do not start duplicate instances.
+- **Launch command:** `~/bitedj/build/mixxx --fullScreen`. Do not start duplicate instances.
 - **Original visual design:** unchanged fin geometry, bite marks, colors, outlines, slow movement, four-second pause, and default 30 FPS. Animation/network timers pause when BiteDJ is running and the launcher is inactive.
 - **No process-based blanking:** detecting a BiteDJ process does not hide or blank the launcher. A fresh painted/exposed-window acknowledgement remains required before suppressing an existing desktop.
 - **Tray:** live clock and network indicators; network details, Switch to Pi Desktop, Shut Down, and Reboot. Power actions require confirmation.
@@ -164,7 +164,7 @@ Uninstall checks for conflicts first and removes only the launcher's own files. 
 
 Automated tests mock power requests and system changes.
 
-Release validation: 61 automated tests passed. The headless Wayland probe passed waiting, recognized, existing-BiteDJ-process, and instance-reuse checks. Installed on MiniTab (Raspberry Pi 4, Trixie), where the FLX4 hold macros were confirmed working.
+Release validation: 61 automated tests passed. The headless Wayland probe passed waiting, recognized, existing-BiteDJ-process, and instance-reuse checks. Installed on a Raspberry Pi 4 running Trixie, where the FLX4 hold macros were confirmed working.
 
 ```bash
 QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v

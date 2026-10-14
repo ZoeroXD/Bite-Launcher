@@ -102,11 +102,11 @@ class RuntimeTests(unittest.TestCase):
 
     def test_start_exact_command_without_forced_scaling(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(rt, "RUN", Path(folder)):
-            with patch.object(rt, "matching", return_value={}), patch.object(rt, "app_path", return_value="/home/xdj/bitedj/build/mixxx"), \
+            with patch.object(rt, "matching", return_value={}), patch.object(rt, "app_path", return_value="/home/dj/bitedj/build/mixxx"), \
                  patch("os.access", return_value=True), patch.object(rt, "config", return_value={}), \
                  patch.object(rt, "session_env", return_value={"QT_QPA_PLATFORM": "wayland"}), patch.object(rt, "spawn") as spawn:
                 rt.start_bitedj()
-                self.assertEqual(spawn.call_args.args[0], ["/home/xdj/bitedj/build/mixxx", "--fullScreen"])
+                self.assertEqual(spawn.call_args.args[0], ["/home/dj/bitedj/build/mixxx", "--fullScreen"])
                 self.assertNotIn("QT_QPA_PLATFORM", spawn.call_args.kwargs["env"])
                 self.assertNotIn("QT_SCALE_FACTOR", spawn.call_args.kwargs["env"])
 

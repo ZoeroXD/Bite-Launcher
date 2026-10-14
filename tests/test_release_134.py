@@ -24,7 +24,7 @@ class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.home = self.root / "home/xdj"
+        self.home = self.root / "home/dj"
         self.home.mkdir(parents=True)
         put(self.root / "etc/os-release", 'ID=debian\nVERSION_CODENAME=trixie\n')
         for command in ("labwc", "wf-panel-pi", "pcmanfm-pi"):
@@ -88,7 +88,7 @@ class CompatibilityTests(unittest.TestCase):
     def test_installer_stops_before_sudo_when_preflight_fails(self):
         bin_dir = self.root / "bin"
         log = self.root / "calls"
-        put(bin_dir / "id", "#!/bin/sh\ncase \"$1\" in -u) echo 1000;; -un) echo xdj;; esac\n", 0o755)
+        put(bin_dir / "id", "#!/bin/sh\ncase \"$1\" in -u) echo 1000;; -un) echo dj;; esac\n", 0o755)
         put(bin_dir / "python3", f"#!/bin/sh\nprintf 'preflight\\n' >> '{log}'\nexit 2\n", 0o755)
         put(bin_dir / "sudo", f"#!/bin/sh\nprintf 'SUDO\\n' >> '{log}'\nexit 99\n", 0o755)
         script = Path(__file__).resolve().parents[1] / "install.sh"
