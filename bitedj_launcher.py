@@ -21,10 +21,11 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 
-from PyQt6.QtCore import QElapsedTimer, QPointF, QProcess, QProcessEnvironment, QRect, QRectF, Qt, QTimer
+from PyQt6.QtCore import QElapsedTimer, QEvent, QPointF, QProcess, QRect, QRectF, Qt, QTimer
 from PyQt6.QtGui import (QColor, QFont, QFontMetrics, QGuiApplication, QImage, QPainter,
                          QPainterPath, QPen, QPixmap)
 from PyQt6.QtWidgets import QApplication, QWidget
+import bite_runtime as runtime
 
 # --------------------------------------------------------------------------- palette (from Bite-DJ-logo.png)
 CHARCOAL = "#231f20"
@@ -56,11 +57,6 @@ GENERIC = {"numark", "reloop", "vestax", "gemini", "pioneer", "denon", "hercules
 
 def norm(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
-
-
-# Present = don't start the Bite Launcher at login (set by Ctrl+Alt+D / bite-mode desktop,
-# cleared by the Bite Launcher shortcut / bite-mode launcher). Checked by labwc autostart only.
-AUTOSTART_OFF = os.path.expanduser("~/.config/bite-launcher/autostart-off")
 
 
 def load_conf(path=CONF_FILE):
@@ -346,14 +342,44 @@ class Desktop(QWidget):
         self.external_running = False
         self.switching = False            # "Opening Pi Desktop..." screen while bite-mode takes over
         self.switch_pressed = False
+        self.power_action = None
+        self.power_pressed = None
+        self.power_busy = False
+        self.power_error = ""
+        self.power_proc = None
+        self.power_timer = QTimer(self)
+        self.power_timer.setSingleShot(True)
+        self.power_timer.timeout.connect(self.power_timeout)
+        self.dj_child = None
+        self.clock_gesture = False
+        self.clock_cancelled = False
+        self.clock_fired = False
+        self.clock_started = 0.0
+        self.initialized = False
+        self.view_token = None
+        self.reported_token = None
+        self.ready_queued = False
+        self.clock_hold = QTimer(self)
+        self.clock_hold.setSingleShot(True)
+        self.clock_hold.setTimerType(Qt.TimerType.PreciseTimer)
+        self.clock_hold.timeout.connect(self.finish_clock_hold)
 
         self.clock = QElapsedTimer()
         self.clock.start()
         self.fin_cache = {}
         self.fin_rect = QRect()
 
-        # 30 fps is smooth for a slow-gliding fin and uses about half the CPU of 60 fps
-        fps = max(10, min(60, int(conf.get("BITEDJ_FPS", "30") or 30)))
+        # Cap redraws without changing the fin's time-based travel speed.
+        try:
+            fps = max(10, min(60, int(conf.get("BITEDJ_FPS", "30") or 30)))
+        except ValueError:
+            fps = 30
+        try:
+            self.fin_seconds = float(conf.get("BITEDJ_FIN_SECONDS", "30"))
+            if not math.isfinite(self.fin_seconds) or self.fin_seconds <= 0:
+                self.fin_seconds = 30.0
+        except (ValueError, TypeError):
+            self.fin_seconds = 30.0
         self.anim = QTimer(self, interval=round(1000 / fps), timerType=Qt.TimerType.PreciseTimer)
         self.anim.timeout.connect(self.tick)
         self.anim.start()
@@ -371,6 +397,7 @@ class Desktop(QWidget):
         else:
             self.set_controller(("Pioneer DDJ-FLX4", "Pioneer DDJ-FLX4"))
         self.refresh_net()
+        self.initialized = True
 
     # ---------------------------------------------------------------- geometry helpers
     @property
@@ -391,6 +418,14 @@ class Desktop(QWidget):
         u = self.u
         return QRect(int(self.width() - 34 * u), 0, int(34 * u), int(6 * u))
 
+    def clock_rect(self):
+        u = self.u
+        font = self.font(2.3 * u, QFont.Weight.Medium)
+        text = time.strftime(self.conf.get("BITEDJ_CLOCK_FORMAT", "%-I:%M %p"))
+        width = QFontMetrics(font).horizontalAdvance(text)
+        return QRectF(self.width() - 2.4 * u - width - 0.6 * u, 0,
+                      width + 1.2 * u, 6 * u)
+
     def button_rect(self):
         u = self.u
         w, h = 30 * u, 9 * u
@@ -406,7 +441,59 @@ class Desktop(QWidget):
             self.prev_state, self.state, self.fade = self.state, s, 0.0
             if s == RUNNING:
                 self.net_open = False
+                self.cancel_clock_hold()
+            # Never hide or paint a blank screen based solely on a process existing.
+            # BiteDJ's real window naturally covers the launcher when it takes focus.
+            self.sync_activity()
             self.update()
+
+    def sync_activity(self):
+        background = self.state == RUNNING and not self.isActiveWindow()
+        for timer in (self.anim, self.slow, self.sec):
+            if background:
+                timer.stop()
+            elif not timer.isActive():
+                timer.start()
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.ActivationChange and getattr(self, "initialized", False):
+            self.sync_activity()
+            if self.isActiveWindow():
+                self.update()
+        super().changeEvent(event)
+
+    def consume_view_request(self):
+        if self.args.snapshot or not self.initialized:
+            return
+        request = runtime.read_runtime("view-request.json")
+        token = request.get("token")
+        if request.get("protocol") != runtime.VIEW_PROTOCOL or not token or token == self.view_token:
+            return
+        self.view_token = token
+        self.reported_token = None
+        self.show() if self.args.windowed else self.showFullScreen()
+        self.raise_()
+        self.activateWindow()
+        if self.windowHandle():
+            self.windowHandle().requestActivate()
+        self.sync_activity()
+        self.update()
+
+    def publish_painted_view(self):
+        self.ready_queued = False
+        handle = self.windowHandle()
+        if (not self.view_token or self.reported_token == self.view_token
+                or not self.isVisible() or not handle or not handle.isExposed()):
+            return
+        if self.state != RUNNING and self.fade < 1.0:
+            return  # wait until the controller presentation is fully drawn
+        try:
+            runtime.write_runtime("view-ready.json",
+                                  {"protocol": runtime.VIEW_PROTOCOL, "token": self.view_token,
+                                   "pid": os.getpid(), "painted": True})
+            self.reported_token = self.view_token
+        except OSError:
+            pass
 
     def set_controller(self, c):
         changed = (c or (None,))[0] != (self.controller or (None,))[0]
@@ -419,6 +506,12 @@ class Desktop(QWidget):
                 QTimer.singleShot(1200, self.launch)
 
     def scan(self):
+        self.consume_view_request()
+        if self.dj_child is not None and self.dj_child.poll() is not None:
+            code = self.dj_child.returncode
+            self.dj_child = None
+            if code and time.monotonic() - self.launch_started < 20:
+                self.message = "Bite DJ closed unexpectedly. See ~/.cache/bite-launcher.log."
         if not self.args.demo_controller:
             self.set_controller(self.catalog.match(connected_devices()))
         # BiteDJ may also be started by the FLX4 hold-button macro or over SSH
@@ -431,130 +524,80 @@ class Desktop(QWidget):
                 self.set_state(RECOGNIZED if self.controller else WAITING)
 
     def refresh_net(self):
-        if self.state != RUNNING:
+        if self.state != RUNNING or self.isActiveWindow():
             self.net.refresh()
             self.update(self.tray_rect().adjusted(-300, 0, 0, 0))
             if self.net_open:
                 self.update(self.net_panel_rect().toAlignedRect().adjusted(-4, -4, 4, 4))
 
     def app_cmd(self):
-        """The program the Launch button runs.
-
-        Same as the BiteDJ desktop entry and the FLX4 hold macro: ~/bitedj/build/mixxx --fullScreen.
-        Set BITEDJ_APP (or DJRIG_APP) in /etc/djrig.conf to a full path to use something else.
-        """
-        def resolve(c):
-            c = os.path.expanduser(c or "")
-            if not c:
-                return None
-            if os.path.isabs(c):
-                return c if os.access(c, os.X_OK) else None
-            return next((os.path.join(d, c) for d in os.environ.get("PATH", "").split(":")
-                         if os.access(os.path.join(d, c), os.X_OK)), None)
-        for key in ("BITEDJ_APP", "DJRIG_APP"):
-            v = self.conf.get(key, "")
-            if os.path.isabs(os.path.expanduser(v)) and resolve(v):
-                return resolve(v)
-        for cand in ("~/bitedj/build/mixxx", self.conf.get("DJRIG_APP", ""), "/usr/local/bin/bitedj",
-                     "/opt/bitedj/bin/bitedj", "/opt/bitedj/bin/mixxx", "mixxx"):
-            path = resolve(cand)
-            if path:
-                return path
-        return None
-
-    def app_args(self):
-        return shlex.split(self.conf.get("BITEDJ_APP_ARGS", "--fullScreen"))
+        """Same build path as the integrated FLX4 macro; no alternate binary fallback."""
+        path = runtime.app_path()
+        return path if os.path.isabs(path) and os.access(path, os.X_OK) else None
 
     def bitedj_pid(self):
-        cmd = self.app_cmd()
-        if not cmd:
-            return None
-        targets = {os.path.realpath(cmd), cmd}
-        for pid in os.listdir("/proc"):
-            if pid.isdigit() and int(pid) != os.getpid():
-                try:
-                    with open(f"/proc/{pid}/cmdline", "rb") as f:
-                        argv0 = f.read().split(b"\0", 1)[0].decode(errors="ignore")
-                except OSError:
-                    continue
-                if argv0 and (argv0 in targets or os.path.realpath(argv0) in targets):
-                    return int(pid)
-        return None
+        return next(iter(runtime.matching("bitedj")), None)
 
     def bite_mode_cmd(self):
-        """bite-mode ships with BiteDJ-On-Off-Macro-with-FLX4 (installed to ~/bin)."""
-        for cand in (self.conf.get("BITE_MODE", ""), os.path.expanduser("~/bin/bite-mode"), "/usr/local/bin/bite-mode"):
+        """Prefer the integrated helper; do not use a stale macro's implementation."""
+        for cand in ("/usr/local/bin/bite-mode",):
             if cand and os.access(os.path.expanduser(cand), os.X_OK):
                 return os.path.expanduser(cand)
         return None
 
     def switch_to_desktop(self):
-        """Ctrl+Alt+D or the tray button: autostart off, close the launcher, back to the Pi desktop.
+        """Clock hold or tray button: autostart off, close BiteDJ/launcher, restore desktop.
 
         Same as holding both 4 BEAT/EXIT on the FLX4. The Bite Launcher shortcut turns autostart back on,
         so the Pi boots into whichever mode was used last.
         """
         cmd = self.bite_mode_cmd()
         self.net_open = False
-        # Without bite-mode the desktop must already be running underneath (not on the Lite kiosk image)
-        if not cmd and QProcess.execute("pgrep", ["-u", str(os.getuid()), "-x", "wf-panel-pi"]) != 0:
-            self.message = "No Pi desktop to switch to"
+        if not cmd:
+            self.message = "Install the complete Bite Launcher package to switch modes"
             self.update()
             return
-        try:
-            os.makedirs(os.path.dirname(AUTOSTART_OFF), exist_ok=True)
-            open(AUTOSTART_OFF, "w").close()
-        except OSError:
-            pass
         self.switching = True
         self.update()
-        # Detached: bite-mode stops the wrapper, then this launcher, then brings back the desktop
-        if cmd and QProcess.startDetached(cmd, ["desktop"]):
+        # Detached: helper stops wrapper, closes BiteDJ, stops this app, restores desktop.
+        try:
+            self.mode_child = runtime.spawn([cmd, "desktop"])
+            QTimer.singleShot(1000, self.check_mode_switch)
+        except OSError as exc:
+            self.switching = False
+            self.message = str(exc)
+            self.update()
+
+    def check_mode_switch(self):
+        if not self.switching:
             return
-        # No bite-mode: stop the wrapper first (it would restart us), the black backdrop, then quit.
-        # The Pi desktop is still running underneath, so it's what's left on screen.
-        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "/usr/local/bin/bitedj-launcher"])
-        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "(^|/)swaybg -c #000000"])
-        QApplication.quit()
+        result = self.mode_child.poll()
+        if result is None:
+            QTimer.singleShot(1000, self.check_mode_switch)
+        else:
+            self.switching = False
+            self.message = "Desktop switch did not complete. See ~/.cache/bite-launcher.log."
+            self.update()
 
     def launch(self):
         if self.state == RUNNING or self.proc is not None:
             return
-        cmd = self.app_cmd()
-        if not cmd:
-            self.message = "BiteDJ is not installed"
-            self.update()
+        if not self.args.demo_controller:
+            self.set_controller(self.catalog.match(connected_devices()))
+        if not self.controller:
             return
-        # Same environment as the desktop entry; extra Qt settings only if set in /etc/djrig.conf
-        env = QProcessEnvironment.systemEnvironment()
-        env.remove("QT_QPA_PLATFORM")          # the launcher's own setting must not leak into BiteDJ
-        if self.conf.get("DJRIG_QPA"):
-            env.insert("QT_QPA_PLATFORM", self.conf["DJRIG_QPA"])
-        if self.conf.get("DJRIG_BITEDJ_SCALE"):
-            env.insert("QT_SCALE_FACTOR", self.conf["DJRIG_BITEDJ_SCALE"])
-        self.proc = QProcess(self)
-        self.proc.setProcessEnvironment(env)
-        self.proc.setWorkingDirectory(os.path.dirname(cmd))   # BiteDJ's build folder, like the hold macro
-        self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.ForwardedChannels)
-        self.proc.finished.connect(self.on_finished)
-        self.proc.errorOccurred.connect(lambda e: e == QProcess.ProcessError.FailedToStart and self.on_finished(-1, None))
-        self.message = ""
-        self.launch_started = time.monotonic()
-        self.proc.start(cmd, self.app_args())
-        self.set_state(RUNNING)
-
-    def on_finished(self, code, _status):
-        quick = time.monotonic() - self.launch_started < 20
-        self.proc = None
-        name = "Mixxx" if self.conf.get("DJRIG_APP") == "mixxx" else "BiteDJ"
-        self.message = f"{name} closed unexpectedly. Tap Launch to try again." if (quick and code != 0) else ""
-        self.set_state(RECOGNIZED if self.controller else WAITING)
-        self.scan()
+        try:
+            self.dj_child = runtime.start_bitedj()
+            self.message = ""
+            self.launch_started = time.monotonic()
+            self.external_running = True
+            self.set_state(RUNNING)
+        except (OSError, RuntimeError) as exc:
+            self.message = str(exc)
+            self.update()
 
     # ---------------------------------------------------------------- animation
     def tick(self):
-        if self.state == RUNNING and self.fade >= 1.0:
-            return       # BiteDJ is on screen: spend zero CPU here
         if self.fade < 1.0:
             self.fade = min(1.0, self.fade + self.anim.interval() / 1000 / 0.35)   # 0.35 s crossfade
         self.update(self.center_rect())
@@ -567,7 +610,7 @@ class Desktop(QWidget):
         W, H = self.width(), self.height()
         fh = H * 0.15
         fw = fh * D_ASPECT / (1 - TIP_X)          # keep the D's exact width-to-height ratio
-        swim = float(self.conf.get("BITEDJ_FIN_SECONDS", "30"))
+        swim = self.fin_seconds
         pause = 4.0
         span = W + fw * 2
         t = self.clock.elapsed() / 1000.0
@@ -587,8 +630,6 @@ class Desktop(QWidget):
         qp.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         qp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         qp.fillRect(ev.rect(), Qt.GlobalColor.black)
-        if self.state == RUNNING and self.fade >= 1.0:
-            return
         if self.switching:
             u = self.u
             qp.setPen(QColor(150, 145, 142))
@@ -597,12 +638,23 @@ class Desktop(QWidget):
             return
         self.paint_tray(qp)
         t = self.clock.elapsed() / 1000.0
-        if self.fade < 1.0:
+        if self.state == RUNNING:
+            # Preserve the original complete screen behind BiteDJ, not an empty canvas.
+            self.paint_center(qp, RECOGNIZED if self.controller else WAITING, 1.0, t)
+        elif self.prev_state == RUNNING:
+            self.paint_center(qp, self.state, 1.0, t)
+        elif self.fade < 1.0:
             self.paint_center(qp, self.prev_state, 1.0 - self.fade, t)
-        self.paint_center(qp, self.state, self.fade, t)
+            self.paint_center(qp, self.state, self.fade, t)
+        else:
+            self.paint_center(qp, self.state, self.fade, t)
         self.paint_fin(qp)
         if self.net_open:
             self.paint_net_panel(qp)
+        qp.end()
+        if self.view_token and self.view_token != self.reported_token and not self.ready_queued:
+            self.ready_queued = True
+            QTimer.singleShot(0, self.publish_painted_view)
 
     def paint_fin(self, qp):
         rect, right, fw, fh = self.fin_geometry()
@@ -628,7 +680,7 @@ class Desktop(QWidget):
             qp.drawText(QRectF(0, cy - 3 * u, W, 7 * u), Qt.AlignmentFlag.AlignCenter, "No Controller Recognized")
             qp.setPen(dim)
             qp.setFont(self.font(2.4 * u))
-            qp.drawText(QRectF(0, cy + 4 * u, W, 4 * u), Qt.AlignmentFlag.AlignCenter, "Plug in a DJ controller supported by BiteDJ")
+            qp.drawText(QRectF(0, cy + 4 * u, W, 4 * u), Qt.AlignmentFlag.AlignCenter, "Plug in a DJ controller supported by Bite DJ.")
             # three breathing dots
             for i in range(3):
                 a = 0.25 + 0.75 * max(0.0, math.sin(t * 3.0 - i * 0.7))
@@ -756,13 +808,69 @@ class Desktop(QWidget):
 
     def net_panel_rect(self):
         u = self.u
-        w, h = 40 * u, 34 * u
+        w, h = 40 * u, 51 * u
         return QRectF(self.width() - w - 1.5 * u, 6.5 * u, w, h)
 
     def switch_button_rect(self):
         u = self.u
         r = self.net_panel_rect()
         return QRectF(r.left() + 2.2 * u, r.top() + 20.5 * u, r.width() - 4.4 * u, 7 * u)
+
+    def power_button_rect(self, action):
+        r, u = self.net_panel_rect(), self.u
+        row = 0 if action in ("shutdown", "confirm") else 1
+        return QRectF(r.left() + 2.2 * u, r.top() + (29 + row * 8.5) * u,
+                      r.width() - 4.4 * u, 7 * u)
+
+    def power_choices(self):
+        return ("confirm", "cancel") if self.power_action else ("shutdown", "reboot")
+
+    def request_power(self, action):
+        """First touch arms a confirmation. No system operation occurs here."""
+        if self.power_busy or action not in ("shutdown", "reboot"):
+            return
+        self.cancel_clock_hold()
+        self.power_action = action
+        self.power_error = ""
+        self.update()
+
+    def confirm_power(self):
+        if self.power_busy or self.power_action not in ("shutdown", "reboot"):
+            return
+        self.power_busy = True
+        self.power_error = ""
+        if self.power_proc:
+            self.power_proc.deleteLater()
+        self.power_proc = QProcess(self)
+        self.power_proc.finished.connect(self.power_finished)
+        self.power_proc.errorOccurred.connect(self.power_failed)
+        # Use normal local-session authorization; never sudo, force, or change saved mode.
+        command = "poweroff" if self.power_action == "shutdown" else "reboot"
+        self.power_proc.start("/usr/bin/systemctl", ["--no-ask-password", "--no-block", command])
+        self.power_timer.start(10000)
+        self.update()
+
+    def power_finished(self, code, _status):
+        self.power_timer.stop()
+        if code != 0:
+            self.power_busy = False
+            detail = bytes(self.power_proc.readAllStandardError()).decode(errors="replace").strip()
+            self.power_error = detail[:90] or "Power request was refused. Try from Pi Desktop."
+        # On success keep the UI visible until the system closes this session.
+        self.update()
+
+    def power_failed(self, _error):
+        self.power_timer.stop()
+        self.power_busy = False
+        self.power_error = "Could not send power request. Try from Pi Desktop."
+        self.update()
+
+    def power_timeout(self):
+        if self.power_proc and self.power_proc.state() != QProcess.ProcessState.NotRunning:
+            self.power_proc.kill()
+            self.power_busy = False
+            self.power_error = "Power request timed out. Try from Pi Desktop."
+            self.update()
 
     def paint_net_panel(self, qp):
         u = self.u
@@ -787,32 +895,110 @@ class Desktop(QWidget):
         # Switch to the regular Raspberry Pi desktop (runs bite-mode desktop)
         qp.setPen(QPen(QColor(60, 56, 54), 1))
         qp.drawLine(QPointF(r.left() + 2.2 * u, r.top() + 19 * u), QPointF(r.right() - 2.2 * u, r.top() + 19 * u))
-        b = self.switch_button_rect()
-        qp.setPen(QPen(QColor(120, 115, 112), max(1.0, 0.2 * u)))
-        qp.setBrush(QColor(60, 56, 54) if self.switch_pressed else QColor(30, 28, 29))
-        qp.drawRoundedRect(b, b.height() / 2, b.height() / 2)
-        qp.setPen(QColor(235, 232, 230))
-        qp.setFont(self.font(2.2 * u, QFont.Weight.DemiBold))
-        qp.drawText(b, Qt.AlignmentFlag.AlignCenter, "Switch to Pi Desktop")
+        def button(rect, label, pressed, color):
+            qp.setPen(QPen(QColor(color), max(1.0, 0.2 * u)))
+            qp.setBrush(QColor(60, 56, 54) if pressed else QColor(30, 28, 29))
+            qp.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
+            qp.setPen(QColor(235, 232, 230))
+            qp.setFont(self.font(2.2 * u, QFont.Weight.DemiBold))
+            qp.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
+
+        if not self.power_action:
+            button(self.switch_button_rect(), "Switch to Pi Desktop", self.switch_pressed, "#787370")
+            button(self.power_button_rect("shutdown"), "Shut Down", self.power_pressed == "shutdown", "#b94c48")
+            button(self.power_button_rect("reboot"), "Reboot", self.power_pressed == "reboot", PURPLE)
+        else:
+            label = "Shut down this Pi?" if self.power_action == "shutdown" else "Reboot this Pi?"
+            if self.power_busy:
+                label = "Shutting down..." if self.power_action == "shutdown" else "Rebooting..."
+            qp.setPen(QColor(235, 232, 230))
+            qp.setFont(self.font(2.2 * u, QFont.Weight.DemiBold))
+            qp.drawText(self.switch_button_rect(), Qt.AlignmentFlag.AlignCenter, label)
+            if not self.power_busy:
+                button(self.power_button_rect("confirm"), "Confirm Shut Down" if self.power_action == "shutdown"
+                       else "Confirm Reboot", self.power_pressed == "confirm", "#b94c48")
+                button(self.power_button_rect("cancel"), "Cancel", self.power_pressed == "cancel", "#787370")
         qp.setPen(QColor(120, 115, 112))
         qp.setFont(self.font(1.7 * u))
-        qp.drawText(QRectF(r.left(), b.bottom() + 0.6 * u, r.width(), 3.5 * u), Qt.AlignmentFlag.AlignCenter,
-                    "or hold both 4 BEAT/EXIT on the FLX4 for 8 s")
+        hint = self.power_error or ("Save your DJ work first." if self.power_action else
+                                   "Press “4 BEAT / EXIT” to disable launcher")
+        qp.drawText(QRectF(r.left() + 2 * u, r.top() + 45.5 * u, r.width() - 4 * u, 5 * u),
+                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, hint)
         qp.restore()
 
     # ---------------------------------------------------------------- input (touch arrives as mouse events)
+    def cancel_clock_hold(self):
+        self.clock_hold.stop()
+        self.clock_cancelled = True
+
+    def finish_clock_hold(self):
+        if not self.clock_gesture or self.clock_cancelled or self.clock_fired:
+            return
+        remaining = 8.0 - (time.monotonic() - self.clock_started)
+        if remaining > 0:
+            self.clock_hold.start(max(1, math.ceil(remaining * 1000)))
+            return
+        self.clock_fired = True
+        self.switch_to_desktop()
+
     def mousePressEvent(self, e):
+        if e.button() != Qt.MouseButton.LeftButton:
+            return
+        if self.switching or self.power_busy:
+            return
         p = e.position()
-        if self.net_open and self.switch_button_rect().contains(p):
-            self.switch_pressed = True
-            self.update(self.net_panel_rect().toAlignedRect().adjusted(-4, -4, 4, 4))
+        if self.net_open and self.net_panel_rect().contains(p):
+            for action in self.power_choices():
+                if self.power_button_rect(action).contains(p):
+                    self.power_pressed = action
+                    self.update()
+                    return
+            if not self.power_action and self.switch_button_rect().contains(p):
+                self.switch_pressed = True
+                self.update()
+            return  # Never click through the menu into the Launch button.
+        if self.clock_rect().contains(p):
+            self.power_action = None
+            self.power_error = ""
+            self.clock_gesture, self.clock_cancelled, self.clock_fired = True, False, False
+            self.clock_started = time.monotonic()
+            self.clock_hold.start(8000)
             return
         if self.state == RECOGNIZED and self.button_rect().contains(p):
             self.pressed = True
             self.update(self.button_rect().toAlignedRect().adjusted(-40, -40, 40, 40))
 
     def mouseReleaseEvent(self, e):
+        if e.button() != Qt.MouseButton.LeftButton:
+            return
+        if self.switching or self.power_busy:
+            return
         p = e.position()
+        if self.power_pressed:
+            action, self.power_pressed = self.power_pressed, None
+            if self.net_open and self.power_button_rect(action).contains(p):
+                if action == "cancel":
+                    self.power_action = None
+                    self.power_error = ""
+                elif action == "confirm":
+                    self.confirm_power()
+                else:
+                    self.request_power(action)
+            self.update()
+            return
+        if self.clock_gesture:
+            self.clock_hold.stop()
+            # A late delivered release at >=8 seconds still completes the hold once.
+            if self.clock_rect().contains(p) and time.monotonic() - self.clock_started >= 8:
+                self.finish_clock_hold()
+            if (not self.clock_cancelled and not self.clock_fired
+                    and self.clock_rect().contains(p)
+                    and time.monotonic() - self.clock_started < 0.5):
+                self.net_open = not self.net_open
+                self.refresh_net()
+            self.clock_gesture = False
+            self.update()
+            return
         was = self.pressed
         self.pressed = False
         if self.switch_pressed:
@@ -831,14 +1017,42 @@ class Desktop(QWidget):
             self.refresh_net()
         elif self.net_open and not self.net_panel_rect().contains(p):
             self.net_open = False
+        if not self.net_open:
+            self.power_action = None
+            self.power_error = ""
         self.update()
 
+    def mouseMoveEvent(self, e):
+        if self.clock_gesture and not self.clock_rect().contains(e.position()):
+            self.cancel_clock_hold()
+        super().mouseMoveEvent(e)
+
+    def leaveEvent(self, e):
+        self.cancel_clock_hold()
+        super().leaveEvent(e)
+
+    def focusOutEvent(self, e):
+        self.cancel_clock_hold()
+        self.power_pressed = None
+        self.switch_pressed = False
+        self.pressed = False
+        super().focusOutEvent(e)
+
     def keyPressEvent(self, e):
+        if self.power_busy:
+            return
+        if self.power_action:
+            if e.key() == Qt.Key.Key_Escape:
+                self.power_action = None
+                self.power_error = ""
+                self.update()
+            return
         mods = e.modifiers()
         if e.key() == Qt.Key.Key_Q and mods & Qt.KeyboardModifier.ControlModifier and mods & Qt.KeyboardModifier.AltModifier:
             QApplication.quit()
         elif e.key() == Qt.Key.Key_D and mods & Qt.KeyboardModifier.ControlModifier and mods & Qt.KeyboardModifier.AltModifier:
-            self.switch_to_desktop()
+            if not e.isAutoRepeat():
+                self.switch_to_desktop()
         elif e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self.state == RECOGNIZED:
             self.launch()
 
@@ -900,6 +1114,7 @@ def main():
 
     QGuiApplication.setDesktopFileName("bitedj-launcher")      # Wayland app_id for labwc window rules
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("Bite Launcher")
     w = Desktop(args, conf)
     sw, sh = (int(v) for v in args.size.lower().split("x"))
@@ -921,7 +1136,8 @@ def main():
         rc = read(os.path.expanduser("~/.config/labwc/rc.xml"))
         kiosk_rule = 'identifier="*"' in rc and "ToggleFullscreen" in rc
         w.show() if kiosk_rule else w.showFullScreen()
-        QTimer.singleShot(1500, lambda: w.isFullScreen() or w.showFullScreen())
+        QTimer.singleShot(1500, lambda: w.state == RUNNING or w.isFullScreen() or w.showFullScreen())
+    w.consume_view_request()
     sys.exit(app.exec())
 
 

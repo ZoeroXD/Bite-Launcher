@@ -1,25 +1,3 @@
 #!/bin/sh
-# bite-launcher-open          Bite Launcher desktop/menu shortcut: autostart on, switch to the launcher.
-# bite-launcher-open toggle   Ctrl+Alt+D (labwc key binding): same as the FLX4 4 BEAT/EXIT hold.
-#   Launcher running     -> autostart off, wrapper then launcher stopped, Pi desktop back
-#   Launcher not running -> autostart on, launcher started
-# Uses the FLX4 macro's bite-mode when installed (it also hides/restores the taskbar and desktop).
-OFF="$HOME/.config/bite-launcher/autostart-off"
-U=$(id -u)
-PY='^python3 /opt/bitedj-launcher/bitedj_launcher[.]py'   # the launcher itself, not an editor or grep on the file
-BM=""
-for m in "$HOME/bin/bite-mode" /usr/local/bin/bite-mode; do [ -x "$m" ] && { BM=$m; break; }; done
-
-if [ "$1" = toggle ] && pgrep -u "$U" -f "$PY" >/dev/null; then
-  mkdir -p "${OFF%/*}" && touch "$OFF"
-  [ -n "$BM" ] && exec "$BM" desktop
-  pkill -u "$U" -f /usr/local/bin/bitedj-launcher    # wrapper first, or it restarts the launcher
-  pkill -u "$U" -f '(^|/)swaybg -c #000000'
-  exec pkill -u "$U" -f "$PY"
-fi
-
-rm -f "$OFF"
-pgrep -u "$U" -f "$PY" >/dev/null && exit 0     # already on screen
-[ -n "$BM" ] && exec "$BM" launcher
-pgrep -u "$U" -f '(^|/)swaybg -c #000000' >/dev/null || setsid -f swaybg -c '#000000' >/dev/null 2>&1 </dev/null
-exec setsid -f /usr/local/bin/bitedj-launcher >/dev/null 2>&1 </dev/null
+# No argument = open launcher, never toggle it off.
+exec /usr/local/bin/bite-mode "${1:-launcher}"

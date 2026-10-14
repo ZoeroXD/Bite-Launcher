@@ -1,0 +1,15 @@
+[Unit]
+Description=Bite Launcher integrated FLX4 controls
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/bitedj-launcher/bitedj-hold.py
+Restart=always
+RestartSec=3
+# Listener cleans up aseqdump in its signal handler. Do not kill graphical programs
+# launched by this service (setsid alone does not move them out of its cgroup).
+KillMode=process
+TimeoutStopSec=3
+
+[Install]
+WantedBy=default.target

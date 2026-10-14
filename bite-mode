@@ -1,0 +1,3 @@
+#!/bin/sh
+# Shared implementation, bundled with Bite Launcher.
+exec /usr/bin/python3 /opt/bitedj-launcher/bite_session.py "${1:-toggle}"

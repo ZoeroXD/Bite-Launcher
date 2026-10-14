@@ -1,141 +1,119 @@
 # Bite Launcher
 
-A black, touch-first launcher for the Raspberry Pi 4 DJ rig. It hides the Raspberry Pi desktop, waits until a controller supported by BiteDJ is plugged in, and then shows a purple **Launch** button that starts BiteDJ with `~/bitedj/build/mixxx --fullScreen`, the same command as the BiteDJ desktop entry.
+Version **1.3.4**: the V3.2 launcher with bundled FLX4 controls, plus installer compatibility checks. The installer does not change boot splash, initramfs, or firmware settings.
 
-![Waiting for a controller](screenshots/1-waiting.png)
-![Controller recognized](screenshots/2-recognized.png)
-![Network details](screenshots/3-network.png)
+## Installation from Downloads
 
-## What's on screen
+Save `BiteDJ-Launcher-1.3.4.zip` in the Pi's `/home/xdj/Downloads` folder. Use the newly delivered ZIP, not an older folder or V3.2 archive. Save and close your DJ work before installation and do not switch modes while installation is running.
 
-- **Black screen only.** No panel, menu, wallpaper or cursor. A black background starts first, so the Raspberry Pi desktop never shows.
-- **Small tray, top right:** Ethernet icon, Wi-Fi signal and the clock. Tap the tray to see the Wi-Fi network, Ethernet status, IP address and hostname (handy for SSH or VNC), plus a **Switch to Pi Desktop** button.
-- **Centre, no controller:** **No Controller Recognized** with "Plug in a DJ controller supported by BiteDJ". There is no button, so nothing can be launched.
-- **Centre, controller plugged in:** **Controller Recognized**, the controller's name, and the purple **Launch** button (`#9d55e2`, the purple from the logo). Unplug the controller and the button goes away again.
-- **Shark fin:** a dorsal fin in the logo's stripe order (charcoal, gray, red, orange, blue, purple, gray, charcoal) shaped from the logo's "D". The front edge uses the D's measured curve: a superellipse with exponent 2.9, 1.41 times as wide as it is tall. It also has the D's sharp top corner, its three-lobed bite on the back edge, and the logo's outline: a 2 px black keyline with about 2.5 px of white around it. It sits just above the bottom edge and glides slowly and steadily, Jaws-style, with no bobbing. It takes about 30 seconds to cross from left to right, pauses off screen, then turns around and comes back.
-
-![Fin preview, sped up about 8 times](screenshots/fin-preview.gif)
-
-## How controller detection works
-
-The launcher reads every mapping installed with BiteDJ (`/opt/bitedj/share/mixxx/controllers/*.midi.xml`, `*.hid.xml`). That's 162 mappings in the current BiteDJ source. Every 1.5 seconds it compares them with:
-
-- USB vendor and product IDs (`/sys/bus/usb/devices`)
-- ALSA sound cards (`/proc/asound/cards`)
-- ALSA MIDI clients (`/proc/asound/seq/clients`)
-
-The Pi's own HDMI audio, headphone jack, USB hubs, "Midi Through" and mappings named only after a brand (such as "Numark") are ignored. The most specific match wins, so a DDJ-4000 is never mistaken for a DDJ-400. If you set `DJRIG_APP=mixxx`, stock Mixxx's mappings are checked as well.
-
-Check what it sees over SSH:
+If you download the ZIP on another computer, run these commands there, not inside the Pi SSH session. This example assumes that computer also saves downloads under `$HOME/Downloads`:
 
 ```bash
-python3 /opt/bitedj-launcher/bitedj_launcher.py --list-controllers
+ssh xdj@MiniTab 'mkdir -p "/home/xdj/Downloads"' &&
+scp "$HOME/Downloads/BiteDJ-Launcher-1.3.4.zip" \
+  xdj@MiniTab:/home/xdj/Downloads/ &&
+ssh xdj@MiniTab
 ```
 
-## Install on a running Pi
+If hostname resolution is unavailable, replace `MiniTab` with the Pi's known IP address. Do not rename an older ZIP to match the new filename.
+
+Run as the normal user (`xdj`), not as root:
 
 ```bash
-git clone https://github.com/ZoeroXD/BiteDJ-Launcher.git && cd BiteDJ-Launcher
-./install.sh
+mkdir -p "$HOME/Bite-Launcher-1.3.4" &&
+python3 -m zipfile -e \
+  "$HOME/Downloads/BiteDJ-Launcher-1.3.4.zip" \
+  "$HOME/Bite-Launcher-1.3.4" &&
+cd "$HOME/Bite-Launcher-1.3.4/BiteDJ-Launcher" &&
+bash ./install.sh &&
+cat /opt/bitedj-launcher/VERSION
+```
+
+If you already extracted this release to `~/Downloads/BiteDJ-Launcher`, use:
+
+```bash
+cd "$HOME/Downloads/BiteDJ-Launcher" &&
+if [ "$(cat VERSION)" = "1.3.4" ]; then
+    bash ./install.sh &&
+    cat /opt/bitedj-launcher/VERSION
+else
+    echo "Stop: this is not the 1.3.4 folder."
+fi
+```
+
+The launcher installer checks compatibility before changing installed files or invoking apt. It targets Debian/Raspberry Pi OS Trixie with the Pi desktop components and labwc already installed; it does not install a desktop onto Lite or automatically repair an interrupted package database.
+
+After a successful installation, the version must read `1.3.4`. Then reboot:
+
+```bash
 sudo reboot
 ```
 
-The installer:
+If saved mode is desktop, the Pi intentionally returns to the desktop. Clicking Bite Launcher selects launcher mode for subsequent boots.
 
-1. Installs `python3-pyqt6` and `swaybg`. Qt is already on the Pi because BiteDJ uses it.
-2. Copies the launcher to `/opt/bitedj-launcher` and adds `/usr/local/bin/bitedj-launcher`, which restarts the launcher if it ever crashes.
-3. Creates the **Bite Launcher** shortcut on the desktop (`~/Desktop`) and in the app menu (**Sound & Video**), marked trusted so double-clicking launches it.
-4. Adds the launcher settings to `/etc/djrig.conf`.
-5. On the full Pi desktop, adds **Ctrl+Alt+D** to `~/.config/labwc/rc.xml` (see below).
-6. In `~/.config/labwc/autostart`, comments out `djrig-launch` (which started BiteDJ straight away), adds a black `swaybg` background and starts `bitedj-launcher`. Both are skipped while autostart is off (see below). A backup is saved as `autostart.pre-launcher`.
-7. Hides the rainbow boot screen (see below).
-
-To undo everything, run `./uninstall.sh`. It also brings the rainbow screen back; add `--keep-rainbow-off` to leave it hidden.
-
-## Rainbow boot screen
-
-The rainbow square at power-on is the GPU firmware's splash screen. The installer adds `disable_splash=1` to `/boot/firmware/config.txt` (or `/boot/config.txt` on older systems), which is the official setting for hiding it ([Raspberry Pi documentation](https://www.raspberrypi.com/documentation/computers/config_txt.html)). It's only a picture: hiding it skips no hardware checks and doesn't change how the Pi boots.
-
-- The original file is backed up once as `config.txt.pre-bite-launcher`.
-- If the setting is already on (for example from RPiBiter Startup Cleanup), nothing is changed.
-- An existing `disable_splash=0` line is commented out so uninstall can put it back.
-- To keep the rainbow, install with `./install.sh --keep-rainbow`.
-- It takes effect at the next reboot.
-
-## Switch between Bite Launcher and the Pi desktop
-
-Switching uses `bite-mode` from [BiteDJ-On-Off-Macro-with-FLX4](https://github.com/ZoeroXD/BiteDJ-On-Off-Macro-with-FLX4), so install that too. Once it's installed, you can switch any of these ways:
-
-| From | To | How |
-|---|---|---|
-| Bite Launcher | Pi desktop | Tap the clock, then **Switch to Pi Desktop** |
-| Either | The other | **Ctrl+Alt+D** on a keyboard (same as the FLX4 hold) |
-| Either | The other | Hold **both 4 BEAT/EXIT** buttons on the FLX4 for 8 seconds |
-| Pi desktop | Bite Launcher | Double-click the **Bite Launcher** desktop icon, or open it from the app menu |
-| Either | Either | Over SSH: `~/bin/bite-mode desktop`, `~/bin/bite-mode launcher` or `~/bin/bite-mode status` |
-
-Going to the desktop closes the launcher and BiteDJ (BiteDJ gets 15 seconds to save and quit), then brings back the taskbar and desktop icons. Going back to the launcher stops the taskbar and desktop and opens the launcher full screen on black. The Pi remembers the last mode across reboots. Switching to the desktop (Ctrl+Alt+D, **Switch to Pi Desktop** or the FLX4 hold) turns the launcher's autostart off. Switching back (the **Bite Launcher** icon or the FLX4 hold) turns it on again. All of them use one marker file, `~/.config/bite-launcher/autostart-off`: when it exists, labwc autostart skips the launcher and its black backdrop.
-
-**Ctrl+Alt+D** works on both screens. On the Pi desktop the installer adds it as a labwc key binding in `~/.config/labwc/rc.xml`. It runs `bite-launcher-open toggle`: if the launcher is running, autostart goes off and the Pi desktop comes back; if not, autostart goes on and the launcher starts. That's the same as the FLX4 hold. The Pi desktop runs labwc in merge mode, so the Pi's own shortcuts are kept ([labwc docs](https://labwc.github.io/labwc-config.5.html)). A backup is saved as `rc.xml.pre-bite-launcher`, and uninstall removes the binding.
-
-Without `bite-mode`, Ctrl+Alt+D still turns autostart off. It stops the wrapper first (so nothing restarts the launcher), then the black backdrop, then closes the launcher, leaving the Pi desktop that was running underneath. The **Bite Launcher** icon turns autostart on and starts the wrapper, which opens the launcher. On the Lite kiosk image, where there's no desktop, it shows "No Pi desktop to switch to" instead.
-
-## Bite Launcher shortcut
-
-`bite-launcher.desktop` shows as **Bite Launcher** with the striped-fin icon, on the desktop and in the app menu. It runs `bite-launcher-open`, which turns autostart back on and switches back to launcher mode through `bite-mode` when it's installed, or simply opens the launcher when it isn't. Only one copy runs at a time, so opening it while the launcher is already on screen does nothing.
-
-If double-clicking the desktop icon asks what to do with the file, choose **Execute**. This only happens when the installer couldn't mark it trusted, for example when it was installed over SSH before the desktop had started. Running `./install.sh` again from a terminal on the desktop fixes it.
-
-## Build it into the image
-
-`mixxxpi64-ng-bitedj-launcher.patch` applies to [mixxxpi64-ng-bitedj](https://github.com/ZoeroXD/mixxxpi64-ng-bitedj):
+### Other installer options
 
 ```bash
-cd mixxxpi64-ng-bitedj
-git apply ../BiteDJ-Launcher/mixxxpi64-ng-bitedj-launcher.patch
+bash ./install.sh --check-only
 ```
 
-It adds `python3-pyqt6` to the base packages, puts the launcher, icon and shortcut into the `03-kiosk` stage, starts the launcher instead of `djrig-launch` in labwc autostart, and adds the settings to `djrig.conf`.
+This inspects compatibility without installing. The old `--keep-rainbow` flag remains accepted, but the installer never changes firmware rainbow settings.
 
-## Settings (`/etc/djrig.conf`)
+## Preserved launcher behavior
 
-| Setting | Default | Meaning |
-|---|---|---|
-| `BITEDJ_APP` | `~/bitedj/build/mixxx` | What **Launch** runs (same as the BiteDJ desktop entry and the FLX4 hold macro). Use a full path to change it |
-| `BITEDJ_APP_ARGS` | `--fullScreen` | Arguments passed to it |
-| `DJRIG_APP` | (unset) | Used only when `~/bitedj/build/mixxx` doesn't exist, e.g. `bitedj` or `mixxx` on the image build |
-| `DJRIG_BITEDJ_SCALE` | (unset) | Optional `QT_SCALE_FACTOR` for BiteDJ. Not set means the same scaling as the desktop entry |
-| `DJRIG_QPA` | (unset) | Optional Qt platform for BiteDJ |
-| `BITEDJ_LAUNCHER_AUTOLAUNCH` | `0` | `1` = start BiteDJ by itself about a second after a controller is recognized |
-| `BITEDJ_FPS` | `30` | Animation frame rate. 30 is light on CPU; 60 is the smoothest |
-| `BITEDJ_FIN_SECONDS` | `30` | Seconds for the fin to cross the screen |
-| `BITEDJ_CLOCK_FORMAT` | `%-I:%M %p` | Clock format (`%H:%M` for 24-hour) |
-| `BITEDJ_CONTROLLER_DIRS` | (auto) | Mapping folders to search, separated by colons |
+- **No supported controller:** `No Controller Recognized`, the helper text `Plug in a DJ controller supported by Bite DJ.`, and no Launch button.
+- **Supported controller:** `Controller Recognized`, controller name, and the existing purple Launch button.
+- **Launch command:** `/home/xdj/bitedj/build/mixxx --fullScreen`. Do not start duplicate instances.
+- **Original visual design:** unchanged fin geometry, bite marks, colors, outlines, slow movement, four-second pause, and default 30 FPS. Animation/network timers pause when BiteDJ is running and the launcher is inactive.
+- **No process-based blanking:** detecting a BiteDJ process does not hide or blank the launcher. A fresh painted/exposed-window acknowledgement remains required before suppressing an existing desktop.
+- **Tray:** live clock and network indicators; network details, Switch to Pi Desktop, Shut Down, and Reboot. Power actions require confirmation.
+- **Exact normal-menu footer:** `Press “4 BEAT / EXIT” to disable launcher`.
+- **Saved mode and singleton behavior:** one wrapper/app, persisted autostart choice, desktop shortcut creation at installation, and no shortcut-monitoring daemon.
 
-## Behaviour details
-
-- **While BiteDJ runs,** the launcher stays behind it, stops its animation and network checks, and only does a light check every 1.5 s to see whether BiteDJ is still running, so it uses almost no CPU. When BiteDJ quits, the launcher screen is already there underneath, with no flash of the desktop.
-- **If BiteDJ closes within 20 seconds with an error,** an orange note says so and Launch stays available.
-- **BiteDJ started some other way** (the FLX4 hold-button macro, or SSH) is detected, and the launcher stays out of the way. The launcher, the hold macro and `bite-mode` all use `~/bitedj/build/mixxx`, so they always agree on whether BiteDJ is running.
-- **Touch** works as mouse clicks. **Enter or Space** presses Launch. **Ctrl+Alt+D** switches between the launcher and the Pi desktop. **Ctrl+Alt+Q** quits the launcher (the wrapper restarts it).
-- **Fullscreen:** if `~/.config/labwc/rc.xml` has the kiosk rule that makes every window fullscreen, the launcher leaves it to that rule (asking again would switch it back out). Otherwise, as on the regular Pi desktop, it goes fullscreen by itself.
-
-## Testing on a PC
-
-```bash
-pip install PyQt6
-python3 bitedj_launcher.py --windowed --demo-controller     # pretend an FLX4 is plugged in
-python3 bitedj_launcher.py --snapshot out.png --at 6         # render one frame
-```
-
-## Files
-
-| File | Purpose |
+| Control | Behavior |
 |---|---|
-| `bitedj_launcher.py` | The launcher (Python 3 + PyQt6, one file) |
-| `bitedj-launcher` | Wrapper that restarts it if it exits, and stops when its labwc session ends (used by labwc autostart) |
-| `bite-launcher-open` | What the Bite Launcher shortcut runs: switches back via `bite-mode`, or opens the launcher |
-| `bite-launcher.desktop`, `bite-launcher.png` | Bite Launcher shortcut and icon |
-| `djrig-launcher.conf` | Settings added to `/etc/djrig.conf` |
-| `install.sh`, `uninstall.sh` | Install and remove on a running Pi |
-| `mixxxpi64-ng-bitedj-launcher.patch` | Adds the launcher to the image build |
+| Desktop icon | Always enter launcher mode; enable autostart and reuse a running instance. |
+| Ctrl+Alt+D | Two-way launcher/desktop mode toggle. |
+| Clock hold, eight seconds | One-way desktop exit. Early release cancels. |
+| Switch to Pi Desktop | One-way desktop exit. |
+| Both decks' LOOP IN, three seconds | Directly start BiteDJ; no mode change. |
+| Both decks' LOOP OUT, eight seconds | Stop BiteDJ only; no mode change. |
+| Both decks' 4 BEAT/EXIT, eight seconds | Two-way mode toggle. |
+| Shut Down / Reboot | Confirm, then request the system action; preserve saved mode. |
+
+Desktop exit disables autostart, stops the wrapper first, closes BiteDJ if running, stops the launcher, restores the desktop, and saves desktop mode. Each completed controller hold triggers once; early release cancels.
+
+The `~/.config/bite-launcher/autostart-off` marker still represents desktop mode. Standard Pi desktop autostart commands are guarded in launcher mode instead of being started and hidden afterward; failed launcher startup retains the existing desktop recovery behavior.
+
+## Uninstall
+
+From this release's extracted folder, run:
+
+```bash
+bash ./uninstall.sh
+```
+
+Uninstall checks for conflicts first and removes only the launcher's own files. Boot splash and firmware settings are left untouched. The legacy `--keep-rainbow-off` option remains accepted.
+
+## Verification after installation
+
+1. Confirm `/opt/bitedj-launcher/VERSION` reads `1.3.4`.
+2. Test the waiting and recognized screens and the exact Launch command.
+3. Test clock tap/hold, Ctrl+Alt+D, all three FLX4 holds, and the desktop shortcut.
+4. Test saved ON and OFF mode across reboots.
+5. Confirm power buttons display confirmation. Do not run a power action while DJ work is active.
+
+Automated tests mock power requests and system changes.
+
+Release validation: 61 automated tests passed. The headless Wayland probe passed waiting, recognized, existing-BiteDJ-process, and instance-reuse checks. Installed on MiniTab (Raspberry Pi 4, Trixie), where the FLX4 hold macros were confirmed working.
+
+```bash
+QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
+python3 tests/wayland_smoke.py
+```
+
+The optional Wayland test requires Weston in the testing environment, not on the installed Pi.
+
+## Image-build patch
+
+The included `mixxxpi64-ng-bitedj-launcher.patch` is the preserved earlier image-build reference, not a verified 1.3.4 image-build release. Use the standalone Downloads installer above for this version.

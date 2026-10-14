@@ -1,24 +1,37 @@
 diff --git a/stage-mixxx/00-base/00-packages-nr b/stage-mixxx/00-base/00-packages-nr
-index bb4f0c3..2054721 100644
+index bb4f0c3..8770cb6 100644
 --- a/stage-mixxx/00-base/00-packages-nr
 +++ b/stage-mixxx/00-base/00-packages-nr
-@@ -17,3 +17,4 @@ udisks2
+@@ -17,3 +17,5 @@ udisks2
  udiskie
  polkitd
  zram-tools
 +python3-pyqt6
++qt6-wayland
 diff --git a/stage-mixxx/03-kiosk/00-run.sh b/stage-mixxx/03-kiosk/00-run.sh
-index 1aa224a..c09861b 100755
+index 1aa224a..eeb2014 100755
 --- a/stage-mixxx/03-kiosk/00-run.sh
 +++ b/stage-mixxx/03-kiosk/00-run.sh
-@@ -5,8 +5,18 @@ install -m 644 files/autostart "$H/.config/labwc/autostart"
+@@ -5,8 +5,30 @@ install -m 644 files/autostart "$H/.config/labwc/autostart"
  install -m 644 files/rc.xml "$H/.config/labwc/rc.xml"
  install -m 755 files/djrig-launch "${ROOTFS_DIR}/usr/local/bin/djrig-launch"
  install -m 755 files/djrig-display "${ROOTFS_DIR}/usr/local/bin/djrig-display"
 +install -d "${ROOTFS_DIR}/opt/bitedj-launcher"
++install -m 644 files/VERSION "${ROOTFS_DIR}/opt/bitedj-launcher/VERSION"
 +install -m 755 files/bitedj_launcher.py "${ROOTFS_DIR}/opt/bitedj-launcher/bitedj_launcher.py"
 +install -m 755 files/bitedj-launcher "${ROOTFS_DIR}/usr/local/bin/bitedj-launcher"
 +install -m 755 files/bite-launcher-open "${ROOTFS_DIR}/usr/local/bin/bite-launcher-open"
++install -m 755 files/bite-mode "${ROOTFS_DIR}/usr/local/bin/bite-mode"
++for source in bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_boot.py; do
++  install -m 755 "files/$source" "${ROOTFS_DIR}/opt/bitedj-launcher/$source"
++done
++# Apply the same startup integration to the image without executing its clients.
++PYTHONPATH=files python3 -c 'from pathlib import Path; import sys; from configure_session import configure; configure(Path(sys.argv[1]), system_rc=Path(sys.argv[2]))' "$H" "${ROOTFS_DIR}/etc/xdg/labwc/rc.xml"
++python3 files/configure_boot.py "${ROOTFS_DIR}/etc/xdg/labwc/autostart"
++install -d "$H/bin" "$H/.config/systemd/user/default.target.wants"
++install -m 755 files/bite-mode "$H/bin/bite-mode"
++install -m 644 files/bitedj-hold.service "$H/.config/systemd/user/bitedj-hold.service"
++ln -sf ../bitedj-hold.service "$H/.config/systemd/user/default.target.wants/bitedj-hold.service"
 +install -m 644 files/bite-launcher.png "${ROOTFS_DIR}/opt/bitedj-launcher/bite-launcher.png"
 +install -m 644 files/bite-launcher.desktop "${ROOTFS_DIR}/usr/share/applications/bite-launcher.desktop"
 +install -d "$H/Desktop" && install -m 755 files/bite-launcher.desktop "$H/Desktop/bite-launcher.desktop"
@@ -30,53 +43,35 @@ index 1aa224a..c09861b 100755
 +# Hide the rainbow boot screen (GPU firmware splash)
 +CFG="${ROOTFS_DIR}/boot/firmware/config.txt"; [ -f "$CFG" ] || CFG="${ROOTFS_DIR}/boot/config.txt"
 +grep -qE '^\s*disable_splash\s*=\s*1' "$CFG" || printf '\n# Bite Launcher: hide the rainbow boot screen\n[all]\ndisable_splash=1\n# end Bite Launcher\n' >> "$CFG"
+diff --git a/stage-mixxx/03-kiosk/files/VERSION b/stage-mixxx/03-kiosk/files/VERSION
+new file mode 100644
+index 0000000..2c451b8
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/VERSION
+@@ -0,0 +1 @@
++3.2-power-tray
 diff --git a/stage-mixxx/03-kiosk/files/autostart b/stage-mixxx/03-kiosk/files/autostart
-index b8f8367..cfaeae0 100644
+index b8f8367..220a345 100644
 --- a/stage-mixxx/03-kiosk/files/autostart
 +++ b/stage-mixxx/03-kiosk/files/autostart
-@@ -1,6 +1,10 @@
- # labwc autostart for MixxxPi64-NG + BiteDJ
-+swaybg -c "#000000" &   # black backdrop: no Raspberry Pi desktop is ever shown
- [ -x /usr/local/bin/djrig-display ] && /usr/local/bin/djrig-display &
+@@ -3,4 +3,7 @@
  unclutter-xfixes --timeout 2 &
  # Auto-mount USB sticks under /media/$USER (where BiteDJ looks for Rekordbox drives)
  udiskie --no-tray --no-notify --no-file-manager &
 -/usr/local/bin/djrig-launch &
 +# BiteDJ Launcher waits for a supported controller, then shows the Launch button.
 +# To start BiteDJ straight away instead (old behaviour), swap these two lines.
-+/usr/local/bin/bitedj-launcher &
++/usr/local/bin/bite-mode boot &
 +#/usr/local/bin/djrig-launch &
 diff --git a/stage-mixxx/03-kiosk/files/bite-launcher-open b/stage-mixxx/03-kiosk/files/bite-launcher-open
 new file mode 100755
-index 0000000..d6d8c27
+index 0000000..e52e228
 --- /dev/null
 +++ b/stage-mixxx/03-kiosk/files/bite-launcher-open
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,3 @@
 +#!/bin/sh
-+# bite-launcher-open          Bite Launcher desktop/menu shortcut: autostart on, switch to the launcher.
-+# bite-launcher-open toggle   Ctrl+Alt+D (labwc key binding): same as the FLX4 4 BEAT/EXIT hold.
-+#   Launcher running     -> autostart off, wrapper then launcher stopped, Pi desktop back
-+#   Launcher not running -> autostart on, launcher started
-+# Uses the FLX4 macro's bite-mode when installed (it also hides/restores the taskbar and desktop).
-+OFF="$HOME/.config/bite-launcher/autostart-off"
-+U=$(id -u)
-+PY='^python3 /opt/bitedj-launcher/bitedj_launcher[.]py'   # the launcher itself, not an editor or grep on the file
-+BM=""
-+for m in "$HOME/bin/bite-mode" /usr/local/bin/bite-mode; do [ -x "$m" ] && { BM=$m; break; }; done
-+
-+if [ "$1" = toggle ] && pgrep -u "$U" -f "$PY" >/dev/null; then
-+  mkdir -p "${OFF%/*}" && touch "$OFF"
-+  [ -n "$BM" ] && exec "$BM" desktop
-+  pkill -u "$U" -f /usr/local/bin/bitedj-launcher    # wrapper first, or it restarts the launcher
-+  pkill -u "$U" -f '(^|/)swaybg -c #000000'
-+  exec pkill -u "$U" -f "$PY"
-+fi
-+
-+rm -f "$OFF"
-+pgrep -u "$U" -f "$PY" >/dev/null && exit 0     # already on screen
-+[ -n "$BM" ] && exec "$BM" launcher
-+pgrep -u "$U" -f '(^|/)swaybg -c #000000' >/dev/null || setsid -f swaybg -c '#000000' >/dev/null 2>&1 </dev/null
-+exec setsid -f /usr/local/bin/bitedj-launcher >/dev/null 2>&1 </dev/null
++# No argument = open launcher, never toggle it off.
++exec /usr/local/bin/bite-mode "${1:-launcher}"
 diff --git a/stage-mixxx/03-kiosk/files/bite-launcher.desktop b/stage-mixxx/03-kiosk/files/bite-launcher.desktop
 new file mode 100644
 index 0000000..4ebca9f
@@ -344,26 +339,562 @@ NUPf8ET+%q`e*l<`%^Cmz
 literal 0
 HcmV?d00001
 
+diff --git a/stage-mixxx/03-kiosk/files/bite-mode b/stage-mixxx/03-kiosk/files/bite-mode
+new file mode 100755
+index 0000000..d69c2d4
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/bite-mode
+@@ -0,0 +1,3 @@
++#!/bin/sh
++# Shared implementation, bundled with Bite Launcher.
++exec /usr/bin/python3 /opt/bitedj-launcher/bite_session.py "${1:-toggle}"
+diff --git a/stage-mixxx/03-kiosk/files/bite_runtime.py b/stage-mixxx/03-kiosk/files/bite_runtime.py
+new file mode 100644
+index 0000000..b6b37d9
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/bite_runtime.py
+@@ -0,0 +1,242 @@
++"""Shared settings and narrowly targeted process operations. No background service."""
++import contextlib
++import fcntl
++import json
++import os
++from pathlib import Path
++import shlex
++import signal
++import secrets
++import subprocess
++import time
++
++HOME = Path.home()
++INSTALL = Path("/opt/bitedj-launcher")
++STATE = HOME / ".config/bite-launcher"
++OFF = STATE / "autostart-off"
++RUN = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "bite-launcher"
++APP = str(INSTALL / "bitedj_launcher.py")
++SESSION = str(INSTALL / "bite_session.py")
++VIEW_PROTOCOL = 2
++
++
++def config():
++    values = {}
++    try:
++        for line in Path(os.environ.get("DJRIG_CONF", "/etc/djrig.conf")).read_text().splitlines():
++            parts = shlex.split(line, comments=True)
++            if parts and "=" in parts[0]:
++                key, value = " ".join(parts).split("=", 1)
++                values[key] = value
++    except (OSError, ValueError):
++        pass
++    return values
++
++
++def app_path():
++    # Never silently prefer another Mixxx installation over the user's build.
++    return os.path.expanduser(config().get("BITEDJ_APP", "~/bitedj/build/mixxx"))
++
++
++def ensure_runtime():
++    RUN.mkdir(parents=True, exist_ok=True, mode=0o700)
++    return RUN
++
++
++def write_runtime(name, payload):
++    path = ensure_runtime() / name
++    temporary = path.with_name(path.name + f".{os.getpid()}.new")
++    temporary.write_text(json.dumps(payload))
++    temporary.replace(path)
++
++
++def request_view():
++    token = secrets.token_hex(16)
++    write_runtime("view-request.json", {"protocol": VIEW_PROTOCOL, "token": token})
++    return token
++
++
++def read_runtime(name):
++    try:
++        value = json.loads((RUN / name).read_text())
++        return value if isinstance(value, dict) else {}
++    except (OSError, ValueError):
++        return {}
++
++
++def view_ready(token):
++    value = read_runtime("view-ready.json")
++    return (value.get("protocol") == VIEW_PROTOCOL and value.get("token") == token
++            and value.get("painted") is True and value.get("pid") in matching("launcher"))
++
++
++def check_display():
++    """Probe the real Qt backend before creating a backdrop or hiding the desktop."""
++    env = session_env()
++    env["QT_QPA_PLATFORM"] = "wayland"
++    try:
++        probe = subprocess.run(
++            ["/usr/bin/python3", "-c",
++             "from PyQt6.QtWidgets import QApplication; app=QApplication([])"],
++            env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=8)
++    except (OSError, subprocess.TimeoutExpired) as exc:
++        raise RuntimeError(f"Cannot open the graphical session: {exc}") from exc
++    if probe.returncode:
++        raise RuntimeError("Qt Wayland could not start; desktop left unchanged.\n"
++                           + probe.stderr[-3000:])
++
++
++def report_error(message):
++    log = HOME / ".cache/bite-launcher.log"
++    log.parent.mkdir(parents=True, exist_ok=True)
++    with log.open("a") as output:
++        output.write(time.strftime("%Y-%m-%d %H:%M:%S ") + message + "\n")
++    try:
++        subprocess.run(["notify-send", "--app-name=Bite Launcher", "Bite Launcher",
++                        "Could not open the launcher. See ~/.cache/bite-launcher.log."],
++                       env=session_env(), timeout=3, stdout=subprocess.DEVNULL,
++                       stderr=subprocess.DEVNULL)
++    except (OSError, subprocess.TimeoutExpired):
++        pass
++
++
++@contextlib.contextmanager
++def lock(name):
++    path = ensure_runtime() / (name + ".lock")
++    with path.open("a") as handle:
++        try:
++            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
++        except BlockingIOError:
++            raise RuntimeError(f"{name}: already running or switching") from None
++        yield
++
++
++def processes():
++    """Only this user's processes, parsed as argv, never broad pkill patterns."""
++    result = {}
++    for item in Path("/proc").iterdir():
++        if not item.name.isdigit() or int(item.name) == os.getpid():
++            continue
++        try:
++            if item.stat().st_uid != os.getuid():
++                continue
++            argv = item.joinpath("cmdline").read_bytes().rstrip(b"\0").split(b"\0")
++            if argv and argv[0]:
++                result[int(item.name)] = [x.decode(errors="replace") for x in argv]
++        except (OSError, ProcessLookupError):
++            continue
++    return result
++
++
++def role(argv, name):
++    exe = Path(argv[0]).name
++    script = argv[1] if len(argv) > 1 else ""
++    if name == "launcher":
++        return exe.startswith("python") and script == APP
++    if name == "wrapper":
++        return ((exe.startswith("python") and script == SESSION and argv[2:3] == ["wrapper"])
++                or argv[0] == "/usr/local/bin/bitedj-launcher"
++                or (exe in ("sh", "bash", "dash") and script == "/usr/local/bin/bitedj-launcher"))
++    if name == "bitedj":
++        return os.path.realpath(argv[0]) == os.path.realpath(app_path())
++    if name == "backdrop":
++        return exe == "swaybg" and "-c" in argv and argv[argv.index("-c") + 1:][:1] == ["#000000"]
++    if name == "desktop-child":
++        return ((exe == "pcmanfm" and "--desktop" in argv)
++                or (exe == "swaybg" and "-m" in argv))
++    if name == "desktop-respawn":
++        # lwrespawn is commonly a shell script; only its desktop/panel instances.
++        is_respawn = exe == "lwrespawn" or Path(script).name == "lwrespawn"
++        return is_respawn and any(Path(x).name in ("pcmanfm-pi", "wf-panel-pi") for x in argv[1:])
++    if name == "legacy-listener":
++        return exe.startswith("python") and script == str(HOME / "bin/bitedj-hold.py")
++    if name == "flx4-reader":
++        return exe == "aseqdump" and argv[1:] == ["-p", "DDJ-FLX4"]
++    return exe == name or (exe in ("sh", "bash", "dash") and Path(script).name == name)
++
++
++def matching(name):
++    return {pid: argv for pid, argv in processes().items() if role(argv, name)}
++
++
++def stop(name, timeout=3):
++    targets = matching(name)
++    for pid, argv in targets.items():
++        if processes().get(pid) == argv:
++            try:
++                os.kill(pid, signal.SIGTERM)
++            except ProcessLookupError:
++                pass
++    end = time.monotonic() + timeout
++    while time.monotonic() < end:
++        current = processes()
++        if not any(current.get(pid) == argv for pid, argv in targets.items()):
++            return
++        time.sleep(0.1)
++    # Only force the exact original processes still present.
++    current = processes()
++    for pid, argv in targets.items():
++        if current.get(pid) == argv:
++            try:
++                os.kill(pid, signal.SIGKILL)
++            except ProcessLookupError:
++                pass
++
++
++def session_env():
++    env = dict(os.environ)
++    # Import the active compositor client's session, not a hard-coded wayland-0.
++    owned = processes()
++    for name in ("wf-panel-pi", "launcher", "desktop-child", "labwc"):
++        pid = next((p for p, a in owned.items() if role(a, name)), None)
++        if pid:
++            try:
++                for raw in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"):
++                    key, sep, value = raw.partition(b"=")
++                    k = key.decode(errors="replace")
++                    if sep and (k in ("WAYLAND_DISPLAY", "DISPLAY", "DBUS_SESSION_BUS_ADDRESS",
++                                      "XDG_RUNTIME_DIR", "LABWC_PID", "XDG_CURRENT_DESKTOP")
++                                or k.startswith(("XCURSOR_", "GTK_"))):
++                        env[k] = value.decode(errors="replace")
++                if env.get("WAYLAND_DISPLAY"):
++                    break
++            except OSError:
++                pass
++    runtime = Path(env.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
++    env["XDG_RUNTIME_DIR"] = str(runtime)
++    display = env.get("WAYLAND_DISPLAY", "")
++    socket = Path(display) if display.startswith("/") else runtime / display
++    if not display or not socket.is_socket():
++        sockets = sorted(p for p in runtime.glob("wayland-*") if p.is_socket())
++        if sockets:
++            env["WAYLAND_DISPLAY"] = sockets[0].name
++    env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path={runtime}/bus")
++    return env
++
++
++def spawn(argv, env=None, cwd=None):
++    log = HOME / ".cache/bite-launcher.log"
++    log.parent.mkdir(parents=True, exist_ok=True)
++    if log.exists() and log.stat().st_size > 1_000_000:
++        log.replace(log.with_suffix(".log.previous"))
++    with log.open("ab") as output:
++        return subprocess.Popen(argv, env=env or session_env(), cwd=cwd,
++                                stdin=subprocess.DEVNULL, stdout=output, stderr=output,
++                                start_new_session=True, close_fds=True)
++
++
++def start_bitedj():
++    with lock("bitedj-start"):
++        if matching("bitedj"):
++            return None
++        path = app_path()
++        if not os.path.isabs(path) or not os.access(path, os.X_OK):
++            raise RuntimeError(f"BiteDJ executable not found: {path}")
++        env = session_env()
++        env.pop("QT_QPA_PLATFORM", None)
++        settings = config()
++        if settings.get("DJRIG_QPA"):
++            env["QT_QPA_PLATFORM"] = settings["DJRIG_QPA"]
++        if settings.get("DJRIG_BITEDJ_SCALE"):
++            env["QT_SCALE_FACTOR"] = settings["DJRIG_BITEDJ_SCALE"]
++        return spawn([path, "--fullScreen"], env=env, cwd=str(Path(path).parent))
+diff --git a/stage-mixxx/03-kiosk/files/bite_session.py b/stage-mixxx/03-kiosk/files/bite_session.py
+new file mode 100644
+index 0000000..8186471
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/bite_session.py
+@@ -0,0 +1,162 @@
++#!/usr/bin/env python3
++"""One shared mode controller for boot, desktop icon, keyboard, clock, and FLX4."""
++import os
++from pathlib import Path
++import signal
++import sys
++import time
++
++import bite_runtime as rt
++
++
++def save_mode(desktop):
++    rt.STATE.mkdir(parents=True, exist_ok=True)
++    if desktop:
++        rt.OFF.touch()
++    else:
++        rt.OFF.unlink(missing_ok=True)
++
++
++def desktop_available():
++    return all(os.access("/usr/bin/" + x, os.X_OK) for x in ("wf-panel-pi", "pcmanfm-pi"))
++
++
++def stop_desktop():
++    rt.stop("desktop-respawn")
++    for name in ("wf-panel-pi", "pcmanfm-pi", "desktop-child"):
++        rt.stop(name)
++
++
++def start_desktop():
++    rt.stop("backdrop")
++    for name in ("wf-panel-pi", "pcmanfm-pi"):
++        running = rt.matching(name)
++        if name == "pcmanfm-pi":
++            running = running or rt.matching("desktop-child")
++        respawning = any(any(Path(x).name == name for x in a[1:])
++                         for a in rt.matching("desktop-respawn").values())
++        if not running and not respawning:
++            command = ["/usr/bin/" + name]
++            if os.access("/usr/bin/lwrespawn", os.X_OK):
++                command.insert(0, "/usr/bin/lwrespawn")
++            rt.spawn(command)
++
++
++def to_desktop():
++    # Don't kill the interface or change saved mode on Lite with no desktop.
++    if not desktop_available():
++        raise RuntimeError("Pi desktop is not installed; mode was not changed")
++    env = rt.session_env()  # capture before stopping graphical clients
++    os.environ.update(env)
++    save_mode(True)
++    rt.stop("wrapper")             # FIRST: it must not restart the app
++    rt.stop("bitedj", timeout=15)   # latest user specification: always close BiteDJ
++    rt.stop("launcher")
++    start_desktop()
++
++
++def to_launcher():
++    if not Path(rt.APP).is_file():
++        raise RuntimeError("Bite Launcher is not installed")
++    rt.check_display()
++    token = rt.request_view()
++    save_mode(False)
++    new_backdrop = not rt.matching("backdrop")
++    new_wrapper = not rt.matching("wrapper")
++    try:
++        if new_backdrop:
++            rt.spawn(["swaybg", "-c", "#000000"])
++        if new_wrapper:
++            rt.spawn(["/usr/local/bin/bitedj-launcher"])
++        # Only a fresh, matching acknowledgement after a visible paint can hide desktop.
++        # Existing app instances also consume the request and present their window.
++        deadline = time.monotonic() + 10
++        while time.monotonic() < deadline:
++            if rt.view_ready(token):
++                stop_desktop()
++                return
++            time.sleep(0.1)
++        raise RuntimeError("Launcher did not display its interface; desktop was not stopped. "
++                           "Reboot after upgrading, then check ~/.cache/bite-launcher.log.")
++    except (RuntimeError, OSError):
++        # Cancel this unsuccessful startup, not an automatic change to the saved mode.
++        # Never close BiteDJ or an existing launcher merely because acknowledgement failed.
++        if new_wrapper:
++            rt.stop("wrapper")
++        if new_backdrop:
++            rt.stop("backdrop")
++        raise
++
++
++def wrapper():
++    with rt.lock("wrapper"):
++        stopping = False
++
++        def stop_wrapper(_sig, _frame):
++            nonlocal stopping
++            stopping = True
++
++        signal.signal(signal.SIGTERM, stop_wrapper)
++        signal.signal(signal.SIGINT, stop_wrapper)
++        child = None
++        while not stopping and not rt.OFF.exists():
++            env = rt.session_env()
++            compositor = env.get("LABWC_PID")
++            if compositor:
++                try:
++                    os.kill(int(compositor), 0)
++                except (OSError, ValueError):
++                    break
++            if not rt.matching("launcher"):
++                if child is not None:
++                    child.poll()  # reap child; don't accumulate zombies after restarts
++                env["QT_QPA_PLATFORM"] = "wayland"
++                child = rt.spawn(["/usr/bin/python3", rt.APP], env=env)
++            # Poll stop/session state without another permanent worker.
++            for _ in range(10):
++                if stopping or rt.OFF.exists():
++                    break
++                time.sleep(0.1)
++        # Do not kill the launcher child here: mode switch closes BiteDJ before the app.
++
++
++def main(argv=None):
++    command = (argv or sys.argv[1:] or ["toggle"])[0]
++    if command == "wrapper":
++        wrapper()
++        return
++    if command == "status":
++        print("launcher" if rt.matching("launcher") else "desktop")
++        return
++    if command not in ("launcher", "desktop", "toggle", "boot", "start", "stop"):
++        raise RuntimeError("usage: bite-mode launcher|desktop|toggle|boot|status|start|stop")
++    with rt.lock("mode"):
++        if command == "start":
++            rt.start_bitedj()
++        elif command == "stop":
++            rt.stop("bitedj", timeout=15)
++        elif command == "desktop" or (command == "toggle" and rt.matching("launcher")):
++            to_desktop()
++        elif command == "boot" and rt.OFF.exists():
++            if desktop_available():
++                start_desktop()
++        else:
++            try:
++                to_launcher()
++            except (RuntimeError, OSError):
++                if command == "boot" and desktop_available():
++                    # Desktop clients were intentionally not started on this boot.
++                    # Recover visibly on failure without rewriting the saved mode.
++                    rt.stop("wrapper")
++                    rt.stop("launcher")
++                    start_desktop()
++                raise
++
++
++if __name__ == "__main__":
++    try:
++        main()
++    except (RuntimeError, OSError) as exc:
++        rt.report_error(str(exc))
++        print(str(exc), file=sys.stderr)
++        sys.exit(1)
+diff --git a/stage-mixxx/03-kiosk/files/bitedj-hold.py b/stage-mixxx/03-kiosk/files/bitedj-hold.py
+new file mode 100644
+index 0000000..b2a9047
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/bitedj-hold.py
+@@ -0,0 +1,89 @@
++#!/usr/bin/env python3
++"""Bundled FLX4 listener: both LOOP IN 3 s; LOOP OUT / 4 BEAT EXIT 8 s."""
++import os
++import re
++import selectors
++import signal
++import subprocess
++import time
++
++import bite_runtime as rt
++
++PATTERN = re.compile(r"Note (on|off)\s+(\d+), note (\d+)(?:, velocity (\d+))?")
++ACTIONS = {16: (3.0, "start"), 17: (8.0, "stop"), 77: (8.0, "toggle")}
++
++
++class Holds:
++    """Pure gesture state: releasing either deck cancels; one action per hold."""
++    def __init__(self):
++        self.held = set()
++        self.armed = {}
++
++    def event(self, channel, note, on):
++        if channel not in (0, 1) or note not in ACTIONS:
++            return
++        if on:
++            self.held.add((channel, note))
++        else:
++            self.held.discard((channel, note))
++            self.armed.pop(note, None)
++
++    def tick(self, now):
++        result = []
++        for note, (duration, action) in ACTIONS.items():
++            if not all((channel, note) in self.held for channel in (0, 1)):
++                self.armed.pop(note, None)
++            elif note not in self.armed:
++                self.armed[note] = now + duration
++            elif now >= self.armed[note]:
++                result.append(action)
++                self.armed[note] = float("inf")
++        return result
++
++
++def watch():
++    holds = Holds()
++    proc = subprocess.Popen(["stdbuf", "-oL", "aseqdump", "-p", "DDJ-FLX4"], stdout=subprocess.PIPE,
++                            stderr=subprocess.DEVNULL, bufsize=0)
++    children = []
++    buffer = b""
++    try:
++        os.set_blocking(proc.stdout.fileno(), False)
++        with selectors.DefaultSelector() as selector:
++            selector.register(proc.stdout, selectors.EVENT_READ)
++            while proc.poll() is None:
++                for key, _ in selector.select(0.05):
++                    chunk = os.read(key.fd, 65536)
++                    buffer += chunk
++                    while b"\n" in buffer:
++                        line, buffer = buffer.split(b"\n", 1)
++                        match = PATTERN.search(line.decode(errors="replace"))
++                        if match:
++                            kind, channel, note, velocity = match.groups()
++                            holds.event(int(channel), int(note), kind == "on" and velocity != "0")
++                for action in holds.tick(time.monotonic()):
++                    children.append(rt.spawn(["/usr/local/bin/bite-mode", action]))
++                children = [c for c in children if c.poll() is None]
++    finally:
++        if proc.poll() is None:
++            proc.terminate()
++        proc.wait()
++        proc.stdout.close()
++
++
++def main():
++    def shutdown(_signum, _frame):
++        raise SystemExit(0)
++    signal.signal(signal.SIGTERM, shutdown)
++    signal.signal(signal.SIGINT, shutdown)
++    with rt.lock("flx4-listener"):
++        while True:
++            try:
++                watch()
++            except (OSError, ValueError) as exc:
++                print(f"FLX4 listener: {exc}", flush=True)
++            time.sleep(3)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/stage-mixxx/03-kiosk/files/bitedj-hold.service b/stage-mixxx/03-kiosk/files/bitedj-hold.service
+new file mode 100644
+index 0000000..1c75d44
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/bitedj-hold.service
+@@ -0,0 +1,15 @@
++[Unit]
++Description=Bite Launcher integrated FLX4 controls
++StartLimitIntervalSec=0
++
++[Service]
++ExecStart=/usr/bin/python3 /opt/bitedj-launcher/bitedj-hold.py
++Restart=always
++RestartSec=3
++# Listener cleans up aseqdump in its signal handler. Do not kill graphical programs
++# launched by this service (setsid alone does not move them out of its cgroup).
++KillMode=process
++TimeoutStopSec=3
++
++[Install]
++WantedBy=default.target
 diff --git a/stage-mixxx/03-kiosk/files/bitedj-launcher b/stage-mixxx/03-kiosk/files/bitedj-launcher
 new file mode 100755
-index 0000000..47d47ef
+index 0000000..a265392
 --- /dev/null
 +++ b/stage-mixxx/03-kiosk/files/bitedj-launcher
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,3 @@
 +#!/bin/sh
-+# Keeps the Bite Launcher on screen; restarts it if it exits or crashes.
-+# Stops when the labwc session it belongs to ends (e.g. after switching to the Pi Desktop).
-+export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-wayland}
-+while [ -z "$LABWC_PID" ] || kill -0 "$LABWC_PID" 2>/dev/null; do
-+  python3 /opt/bitedj-launcher/bitedj_launcher.py "$@"
-+  sleep 1
-+done
++# A single wrapper, no automatic crash-driven changes to the saved mode.
++exec /usr/bin/python3 /opt/bitedj-launcher/bite_session.py wrapper
 diff --git a/stage-mixxx/03-kiosk/files/bitedj_launcher.py b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
 new file mode 100755
-index 0000000..3ed1ac6
+index 0000000..9a6ff41
 --- /dev/null
 +++ b/stage-mixxx/03-kiosk/files/bitedj_launcher.py
-@@ -0,0 +1,929 @@
+@@ -0,0 +1,1145 @@
 +#!/usr/bin/env python3
 +"""BiteDJ Launcher - a minimal, black, touch-first home screen for the Raspberry Pi DJ rig.
 +
@@ -387,10 +918,11 @@ index 0000000..3ed1ac6
 +import time
 +import xml.etree.ElementTree as ET
 +
-+from PyQt6.QtCore import QElapsedTimer, QPointF, QProcess, QProcessEnvironment, QRect, QRectF, Qt, QTimer
++from PyQt6.QtCore import QElapsedTimer, QEvent, QPointF, QProcess, QRect, QRectF, Qt, QTimer
 +from PyQt6.QtGui import (QColor, QFont, QFontMetrics, QGuiApplication, QImage, QPainter,
 +                         QPainterPath, QPen, QPixmap)
 +from PyQt6.QtWidgets import QApplication, QWidget
++import bite_runtime as runtime
 +
 +# --------------------------------------------------------------------------- palette (from Bite-DJ-logo.png)
 +CHARCOAL = "#231f20"
@@ -422,11 +954,6 @@ index 0000000..3ed1ac6
 +
 +def norm(s):
 +    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
-+
-+
-+# Present = don't start the Bite Launcher at login (set by Ctrl+Alt+D / bite-mode desktop,
-+# cleared by the Bite Launcher shortcut / bite-mode launcher). Checked by labwc autostart only.
-+AUTOSTART_OFF = os.path.expanduser("~/.config/bite-launcher/autostart-off")
 +
 +
 +def load_conf(path=CONF_FILE):
@@ -712,14 +1239,44 @@ index 0000000..3ed1ac6
 +        self.external_running = False
 +        self.switching = False            # "Opening Pi Desktop..." screen while bite-mode takes over
 +        self.switch_pressed = False
++        self.power_action = None
++        self.power_pressed = None
++        self.power_busy = False
++        self.power_error = ""
++        self.power_proc = None
++        self.power_timer = QTimer(self)
++        self.power_timer.setSingleShot(True)
++        self.power_timer.timeout.connect(self.power_timeout)
++        self.dj_child = None
++        self.clock_gesture = False
++        self.clock_cancelled = False
++        self.clock_fired = False
++        self.clock_started = 0.0
++        self.initialized = False
++        self.view_token = None
++        self.reported_token = None
++        self.ready_queued = False
++        self.clock_hold = QTimer(self)
++        self.clock_hold.setSingleShot(True)
++        self.clock_hold.setTimerType(Qt.TimerType.PreciseTimer)
++        self.clock_hold.timeout.connect(self.finish_clock_hold)
 +
 +        self.clock = QElapsedTimer()
 +        self.clock.start()
 +        self.fin_cache = {}
 +        self.fin_rect = QRect()
 +
-+        # 30 fps is smooth for a slow-gliding fin and uses about half the CPU of 60 fps
-+        fps = max(10, min(60, int(conf.get("BITEDJ_FPS", "30") or 30)))
++        # Cap redraws without changing the fin's time-based travel speed.
++        try:
++            fps = max(10, min(60, int(conf.get("BITEDJ_FPS", "30") or 30)))
++        except ValueError:
++            fps = 30
++        try:
++            self.fin_seconds = float(conf.get("BITEDJ_FIN_SECONDS", "30"))
++            if not math.isfinite(self.fin_seconds) or self.fin_seconds <= 0:
++                self.fin_seconds = 30.0
++        except (ValueError, TypeError):
++            self.fin_seconds = 30.0
 +        self.anim = QTimer(self, interval=round(1000 / fps), timerType=Qt.TimerType.PreciseTimer)
 +        self.anim.timeout.connect(self.tick)
 +        self.anim.start()
@@ -737,6 +1294,7 @@ index 0000000..3ed1ac6
 +        else:
 +            self.set_controller(("Pioneer DDJ-FLX4", "Pioneer DDJ-FLX4"))
 +        self.refresh_net()
++        self.initialized = True
 +
 +    # ---------------------------------------------------------------- geometry helpers
 +    @property
@@ -757,6 +1315,14 @@ index 0000000..3ed1ac6
 +        u = self.u
 +        return QRect(int(self.width() - 34 * u), 0, int(34 * u), int(6 * u))
 +
++    def clock_rect(self):
++        u = self.u
++        font = self.font(2.3 * u, QFont.Weight.Medium)
++        text = time.strftime(self.conf.get("BITEDJ_CLOCK_FORMAT", "%-I:%M %p"))
++        width = QFontMetrics(font).horizontalAdvance(text)
++        return QRectF(self.width() - 2.4 * u - width - 0.6 * u, 0,
++                      width + 1.2 * u, 6 * u)
++
 +    def button_rect(self):
 +        u = self.u
 +        w, h = 30 * u, 9 * u
@@ -772,7 +1338,59 @@ index 0000000..3ed1ac6
 +            self.prev_state, self.state, self.fade = self.state, s, 0.0
 +            if s == RUNNING:
 +                self.net_open = False
++                self.cancel_clock_hold()
++            # Never hide or paint a blank screen based solely on a process existing.
++            # BiteDJ's real window naturally covers the launcher when it takes focus.
++            self.sync_activity()
 +            self.update()
++
++    def sync_activity(self):
++        background = self.state == RUNNING and not self.isActiveWindow()
++        for timer in (self.anim, self.slow, self.sec):
++            if background:
++                timer.stop()
++            elif not timer.isActive():
++                timer.start()
++
++    def changeEvent(self, event):
++        if event.type() == QEvent.Type.ActivationChange and getattr(self, "initialized", False):
++            self.sync_activity()
++            if self.isActiveWindow():
++                self.update()
++        super().changeEvent(event)
++
++    def consume_view_request(self):
++        if self.args.snapshot or not self.initialized:
++            return
++        request = runtime.read_runtime("view-request.json")
++        token = request.get("token")
++        if request.get("protocol") != runtime.VIEW_PROTOCOL or not token or token == self.view_token:
++            return
++        self.view_token = token
++        self.reported_token = None
++        self.show() if self.args.windowed else self.showFullScreen()
++        self.raise_()
++        self.activateWindow()
++        if self.windowHandle():
++            self.windowHandle().requestActivate()
++        self.sync_activity()
++        self.update()
++
++    def publish_painted_view(self):
++        self.ready_queued = False
++        handle = self.windowHandle()
++        if (not self.view_token or self.reported_token == self.view_token
++                or not self.isVisible() or not handle or not handle.isExposed()):
++            return
++        if self.state != RUNNING and self.fade < 1.0:
++            return  # wait until the controller presentation is fully drawn
++        try:
++            runtime.write_runtime("view-ready.json",
++                                  {"protocol": runtime.VIEW_PROTOCOL, "token": self.view_token,
++                                   "pid": os.getpid(), "painted": True})
++            self.reported_token = self.view_token
++        except OSError:
++            pass
 +
 +    def set_controller(self, c):
 +        changed = (c or (None,))[0] != (self.controller or (None,))[0]
@@ -785,6 +1403,12 @@ index 0000000..3ed1ac6
 +                QTimer.singleShot(1200, self.launch)
 +
 +    def scan(self):
++        self.consume_view_request()
++        if self.dj_child is not None and self.dj_child.poll() is not None:
++            code = self.dj_child.returncode
++            self.dj_child = None
++            if code and time.monotonic() - self.launch_started < 20:
++                self.message = "Bite DJ closed unexpectedly. See ~/.cache/bite-launcher.log."
 +        if not self.args.demo_controller:
 +            self.set_controller(self.catalog.match(connected_devices()))
 +        # BiteDJ may also be started by the FLX4 hold-button macro or over SSH
@@ -797,130 +1421,80 @@ index 0000000..3ed1ac6
 +                self.set_state(RECOGNIZED if self.controller else WAITING)
 +
 +    def refresh_net(self):
-+        if self.state != RUNNING:
++        if self.state != RUNNING or self.isActiveWindow():
 +            self.net.refresh()
 +            self.update(self.tray_rect().adjusted(-300, 0, 0, 0))
 +            if self.net_open:
 +                self.update(self.net_panel_rect().toAlignedRect().adjusted(-4, -4, 4, 4))
 +
 +    def app_cmd(self):
-+        """The program the Launch button runs.
-+
-+        Same as the BiteDJ desktop entry and the FLX4 hold macro: ~/bitedj/build/mixxx --fullScreen.
-+        Set BITEDJ_APP (or DJRIG_APP) in /etc/djrig.conf to a full path to use something else.
-+        """
-+        def resolve(c):
-+            c = os.path.expanduser(c or "")
-+            if not c:
-+                return None
-+            if os.path.isabs(c):
-+                return c if os.access(c, os.X_OK) else None
-+            return next((os.path.join(d, c) for d in os.environ.get("PATH", "").split(":")
-+                         if os.access(os.path.join(d, c), os.X_OK)), None)
-+        for key in ("BITEDJ_APP", "DJRIG_APP"):
-+            v = self.conf.get(key, "")
-+            if os.path.isabs(os.path.expanduser(v)) and resolve(v):
-+                return resolve(v)
-+        for cand in ("~/bitedj/build/mixxx", self.conf.get("DJRIG_APP", ""), "/usr/local/bin/bitedj",
-+                     "/opt/bitedj/bin/bitedj", "/opt/bitedj/bin/mixxx", "mixxx"):
-+            path = resolve(cand)
-+            if path:
-+                return path
-+        return None
-+
-+    def app_args(self):
-+        return shlex.split(self.conf.get("BITEDJ_APP_ARGS", "--fullScreen"))
++        """Same build path as the integrated FLX4 macro; no alternate binary fallback."""
++        path = runtime.app_path()
++        return path if os.path.isabs(path) and os.access(path, os.X_OK) else None
 +
 +    def bitedj_pid(self):
-+        cmd = self.app_cmd()
-+        if not cmd:
-+            return None
-+        targets = {os.path.realpath(cmd), cmd}
-+        for pid in os.listdir("/proc"):
-+            if pid.isdigit() and int(pid) != os.getpid():
-+                try:
-+                    with open(f"/proc/{pid}/cmdline", "rb") as f:
-+                        argv0 = f.read().split(b"\0", 1)[0].decode(errors="ignore")
-+                except OSError:
-+                    continue
-+                if argv0 and (argv0 in targets or os.path.realpath(argv0) in targets):
-+                    return int(pid)
-+        return None
++        return next(iter(runtime.matching("bitedj")), None)
 +
 +    def bite_mode_cmd(self):
-+        """bite-mode ships with BiteDJ-On-Off-Macro-with-FLX4 (installed to ~/bin)."""
-+        for cand in (self.conf.get("BITE_MODE", ""), os.path.expanduser("~/bin/bite-mode"), "/usr/local/bin/bite-mode"):
++        """Prefer the integrated helper; do not use a stale macro's implementation."""
++        for cand in ("/usr/local/bin/bite-mode",):
 +            if cand and os.access(os.path.expanduser(cand), os.X_OK):
 +                return os.path.expanduser(cand)
 +        return None
 +
 +    def switch_to_desktop(self):
-+        """Ctrl+Alt+D or the tray button: autostart off, close the launcher, back to the Pi desktop.
++        """Clock hold or tray button: autostart off, close BiteDJ/launcher, restore desktop.
 +
 +        Same as holding both 4 BEAT/EXIT on the FLX4. The Bite Launcher shortcut turns autostart back on,
 +        so the Pi boots into whichever mode was used last.
 +        """
 +        cmd = self.bite_mode_cmd()
 +        self.net_open = False
-+        # Without bite-mode the desktop must already be running underneath (not on the Lite kiosk image)
-+        if not cmd and QProcess.execute("pgrep", ["-u", str(os.getuid()), "-x", "wf-panel-pi"]) != 0:
-+            self.message = "No Pi desktop to switch to"
++        if not cmd:
++            self.message = "Install the complete Bite Launcher package to switch modes"
 +            self.update()
 +            return
-+        try:
-+            os.makedirs(os.path.dirname(AUTOSTART_OFF), exist_ok=True)
-+            open(AUTOSTART_OFF, "w").close()
-+        except OSError:
-+            pass
 +        self.switching = True
 +        self.update()
-+        # Detached: bite-mode stops the wrapper, then this launcher, then brings back the desktop
-+        if cmd and QProcess.startDetached(cmd, ["desktop"]):
++        # Detached: helper stops wrapper, closes BiteDJ, stops this app, restores desktop.
++        try:
++            self.mode_child = runtime.spawn([cmd, "desktop"])
++            QTimer.singleShot(1000, self.check_mode_switch)
++        except OSError as exc:
++            self.switching = False
++            self.message = str(exc)
++            self.update()
++
++    def check_mode_switch(self):
++        if not self.switching:
 +            return
-+        # No bite-mode: stop the wrapper first (it would restart us), the black backdrop, then quit.
-+        # The Pi desktop is still running underneath, so it's what's left on screen.
-+        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "/usr/local/bin/bitedj-launcher"])
-+        QProcess.execute("pkill", ["-u", str(os.getuid()), "-f", "(^|/)swaybg -c #000000"])
-+        QApplication.quit()
++        result = self.mode_child.poll()
++        if result is None:
++            QTimer.singleShot(1000, self.check_mode_switch)
++        else:
++            self.switching = False
++            self.message = "Desktop switch did not complete. See ~/.cache/bite-launcher.log."
++            self.update()
 +
 +    def launch(self):
 +        if self.state == RUNNING or self.proc is not None:
 +            return
-+        cmd = self.app_cmd()
-+        if not cmd:
-+            self.message = "BiteDJ is not installed"
-+            self.update()
++        if not self.args.demo_controller:
++            self.set_controller(self.catalog.match(connected_devices()))
++        if not self.controller:
 +            return
-+        # Same environment as the desktop entry; extra Qt settings only if set in /etc/djrig.conf
-+        env = QProcessEnvironment.systemEnvironment()
-+        env.remove("QT_QPA_PLATFORM")          # the launcher's own setting must not leak into BiteDJ
-+        if self.conf.get("DJRIG_QPA"):
-+            env.insert("QT_QPA_PLATFORM", self.conf["DJRIG_QPA"])
-+        if self.conf.get("DJRIG_BITEDJ_SCALE"):
-+            env.insert("QT_SCALE_FACTOR", self.conf["DJRIG_BITEDJ_SCALE"])
-+        self.proc = QProcess(self)
-+        self.proc.setProcessEnvironment(env)
-+        self.proc.setWorkingDirectory(os.path.dirname(cmd))   # BiteDJ's build folder, like the hold macro
-+        self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.ForwardedChannels)
-+        self.proc.finished.connect(self.on_finished)
-+        self.proc.errorOccurred.connect(lambda e: e == QProcess.ProcessError.FailedToStart and self.on_finished(-1, None))
-+        self.message = ""
-+        self.launch_started = time.monotonic()
-+        self.proc.start(cmd, self.app_args())
-+        self.set_state(RUNNING)
-+
-+    def on_finished(self, code, _status):
-+        quick = time.monotonic() - self.launch_started < 20
-+        self.proc = None
-+        name = "Mixxx" if self.conf.get("DJRIG_APP") == "mixxx" else "BiteDJ"
-+        self.message = f"{name} closed unexpectedly. Tap Launch to try again." if (quick and code != 0) else ""
-+        self.set_state(RECOGNIZED if self.controller else WAITING)
-+        self.scan()
++        try:
++            self.dj_child = runtime.start_bitedj()
++            self.message = ""
++            self.launch_started = time.monotonic()
++            self.external_running = True
++            self.set_state(RUNNING)
++        except (OSError, RuntimeError) as exc:
++            self.message = str(exc)
++            self.update()
 +
 +    # ---------------------------------------------------------------- animation
 +    def tick(self):
-+        if self.state == RUNNING and self.fade >= 1.0:
-+            return       # BiteDJ is on screen: spend zero CPU here
 +        if self.fade < 1.0:
 +            self.fade = min(1.0, self.fade + self.anim.interval() / 1000 / 0.35)   # 0.35 s crossfade
 +        self.update(self.center_rect())
@@ -933,7 +1507,7 @@ index 0000000..3ed1ac6
 +        W, H = self.width(), self.height()
 +        fh = H * 0.15
 +        fw = fh * D_ASPECT / (1 - TIP_X)          # keep the D's exact width-to-height ratio
-+        swim = float(self.conf.get("BITEDJ_FIN_SECONDS", "30"))
++        swim = self.fin_seconds
 +        pause = 4.0
 +        span = W + fw * 2
 +        t = self.clock.elapsed() / 1000.0
@@ -953,8 +1527,6 @@ index 0000000..3ed1ac6
 +        qp.setRenderHint(QPainter.RenderHint.TextAntialiasing)
 +        qp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 +        qp.fillRect(ev.rect(), Qt.GlobalColor.black)
-+        if self.state == RUNNING and self.fade >= 1.0:
-+            return
 +        if self.switching:
 +            u = self.u
 +            qp.setPen(QColor(150, 145, 142))
@@ -963,12 +1535,23 @@ index 0000000..3ed1ac6
 +            return
 +        self.paint_tray(qp)
 +        t = self.clock.elapsed() / 1000.0
-+        if self.fade < 1.0:
++        if self.state == RUNNING:
++            # Preserve the original complete screen behind BiteDJ, not an empty canvas.
++            self.paint_center(qp, RECOGNIZED if self.controller else WAITING, 1.0, t)
++        elif self.prev_state == RUNNING:
++            self.paint_center(qp, self.state, 1.0, t)
++        elif self.fade < 1.0:
 +            self.paint_center(qp, self.prev_state, 1.0 - self.fade, t)
-+        self.paint_center(qp, self.state, self.fade, t)
++            self.paint_center(qp, self.state, self.fade, t)
++        else:
++            self.paint_center(qp, self.state, self.fade, t)
 +        self.paint_fin(qp)
 +        if self.net_open:
 +            self.paint_net_panel(qp)
++        qp.end()
++        if self.view_token and self.view_token != self.reported_token and not self.ready_queued:
++            self.ready_queued = True
++            QTimer.singleShot(0, self.publish_painted_view)
 +
 +    def paint_fin(self, qp):
 +        rect, right, fw, fh = self.fin_geometry()
@@ -994,7 +1577,7 @@ index 0000000..3ed1ac6
 +            qp.drawText(QRectF(0, cy - 3 * u, W, 7 * u), Qt.AlignmentFlag.AlignCenter, "No Controller Recognized")
 +            qp.setPen(dim)
 +            qp.setFont(self.font(2.4 * u))
-+            qp.drawText(QRectF(0, cy + 4 * u, W, 4 * u), Qt.AlignmentFlag.AlignCenter, "Plug in a DJ controller supported by BiteDJ")
++            qp.drawText(QRectF(0, cy + 4 * u, W, 4 * u), Qt.AlignmentFlag.AlignCenter, "Plug in a DJ controller supported by Bite DJ.")
 +            # three breathing dots
 +            for i in range(3):
 +                a = 0.25 + 0.75 * max(0.0, math.sin(t * 3.0 - i * 0.7))
@@ -1122,13 +1705,69 @@ index 0000000..3ed1ac6
 +
 +    def net_panel_rect(self):
 +        u = self.u
-+        w, h = 40 * u, 34 * u
++        w, h = 40 * u, 51 * u
 +        return QRectF(self.width() - w - 1.5 * u, 6.5 * u, w, h)
 +
 +    def switch_button_rect(self):
 +        u = self.u
 +        r = self.net_panel_rect()
 +        return QRectF(r.left() + 2.2 * u, r.top() + 20.5 * u, r.width() - 4.4 * u, 7 * u)
++
++    def power_button_rect(self, action):
++        r, u = self.net_panel_rect(), self.u
++        row = 0 if action in ("shutdown", "confirm") else 1
++        return QRectF(r.left() + 2.2 * u, r.top() + (29 + row * 8.5) * u,
++                      r.width() - 4.4 * u, 7 * u)
++
++    def power_choices(self):
++        return ("confirm", "cancel") if self.power_action else ("shutdown", "reboot")
++
++    def request_power(self, action):
++        """First touch arms a confirmation. No system operation occurs here."""
++        if self.power_busy or action not in ("shutdown", "reboot"):
++            return
++        self.cancel_clock_hold()
++        self.power_action = action
++        self.power_error = ""
++        self.update()
++
++    def confirm_power(self):
++        if self.power_busy or self.power_action not in ("shutdown", "reboot"):
++            return
++        self.power_busy = True
++        self.power_error = ""
++        if self.power_proc:
++            self.power_proc.deleteLater()
++        self.power_proc = QProcess(self)
++        self.power_proc.finished.connect(self.power_finished)
++        self.power_proc.errorOccurred.connect(self.power_failed)
++        # Use normal local-session authorization; never sudo, force, or change saved mode.
++        command = "poweroff" if self.power_action == "shutdown" else "reboot"
++        self.power_proc.start("/usr/bin/systemctl", ["--no-ask-password", "--no-block", command])
++        self.power_timer.start(10000)
++        self.update()
++
++    def power_finished(self, code, _status):
++        self.power_timer.stop()
++        if code != 0:
++            self.power_busy = False
++            detail = bytes(self.power_proc.readAllStandardError()).decode(errors="replace").strip()
++            self.power_error = detail[:90] or "Power request was refused. Try from Pi Desktop."
++        # On success keep the UI visible until the system closes this session.
++        self.update()
++
++    def power_failed(self, _error):
++        self.power_timer.stop()
++        self.power_busy = False
++        self.power_error = "Could not send power request. Try from Pi Desktop."
++        self.update()
++
++    def power_timeout(self):
++        if self.power_proc and self.power_proc.state() != QProcess.ProcessState.NotRunning:
++            self.power_proc.kill()
++            self.power_busy = False
++            self.power_error = "Power request timed out. Try from Pi Desktop."
++            self.update()
 +
 +    def paint_net_panel(self, qp):
 +        u = self.u
@@ -1153,32 +1792,110 @@ index 0000000..3ed1ac6
 +        # Switch to the regular Raspberry Pi desktop (runs bite-mode desktop)
 +        qp.setPen(QPen(QColor(60, 56, 54), 1))
 +        qp.drawLine(QPointF(r.left() + 2.2 * u, r.top() + 19 * u), QPointF(r.right() - 2.2 * u, r.top() + 19 * u))
-+        b = self.switch_button_rect()
-+        qp.setPen(QPen(QColor(120, 115, 112), max(1.0, 0.2 * u)))
-+        qp.setBrush(QColor(60, 56, 54) if self.switch_pressed else QColor(30, 28, 29))
-+        qp.drawRoundedRect(b, b.height() / 2, b.height() / 2)
-+        qp.setPen(QColor(235, 232, 230))
-+        qp.setFont(self.font(2.2 * u, QFont.Weight.DemiBold))
-+        qp.drawText(b, Qt.AlignmentFlag.AlignCenter, "Switch to Pi Desktop")
++        def button(rect, label, pressed, color):
++            qp.setPen(QPen(QColor(color), max(1.0, 0.2 * u)))
++            qp.setBrush(QColor(60, 56, 54) if pressed else QColor(30, 28, 29))
++            qp.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
++            qp.setPen(QColor(235, 232, 230))
++            qp.setFont(self.font(2.2 * u, QFont.Weight.DemiBold))
++            qp.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
++
++        if not self.power_action:
++            button(self.switch_button_rect(), "Switch to Pi Desktop", self.switch_pressed, "#787370")
++            button(self.power_button_rect("shutdown"), "Shut Down", self.power_pressed == "shutdown", "#b94c48")
++            button(self.power_button_rect("reboot"), "Reboot", self.power_pressed == "reboot", PURPLE)
++        else:
++            label = "Shut down this Pi?" if self.power_action == "shutdown" else "Reboot this Pi?"
++            if self.power_busy:
++                label = "Shutting down..." if self.power_action == "shutdown" else "Rebooting..."
++            qp.setPen(QColor(235, 232, 230))
++            qp.setFont(self.font(2.2 * u, QFont.Weight.DemiBold))
++            qp.drawText(self.switch_button_rect(), Qt.AlignmentFlag.AlignCenter, label)
++            if not self.power_busy:
++                button(self.power_button_rect("confirm"), "Confirm Shut Down" if self.power_action == "shutdown"
++                       else "Confirm Reboot", self.power_pressed == "confirm", "#b94c48")
++                button(self.power_button_rect("cancel"), "Cancel", self.power_pressed == "cancel", "#787370")
 +        qp.setPen(QColor(120, 115, 112))
 +        qp.setFont(self.font(1.7 * u))
-+        qp.drawText(QRectF(r.left(), b.bottom() + 0.6 * u, r.width(), 3.5 * u), Qt.AlignmentFlag.AlignCenter,
-+                    "or hold both 4 BEAT/EXIT on the FLX4 for 8 s")
++        hint = self.power_error or ("Save your DJ work first." if self.power_action else
++                                   "Clock: hold 8 s for Pi Desktop")
++        qp.drawText(QRectF(r.left() + 2 * u, r.top() + 45.5 * u, r.width() - 4 * u, 5 * u),
++                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, hint)
 +        qp.restore()
 +
 +    # ---------------------------------------------------------------- input (touch arrives as mouse events)
++    def cancel_clock_hold(self):
++        self.clock_hold.stop()
++        self.clock_cancelled = True
++
++    def finish_clock_hold(self):
++        if not self.clock_gesture or self.clock_cancelled or self.clock_fired:
++            return
++        remaining = 8.0 - (time.monotonic() - self.clock_started)
++        if remaining > 0:
++            self.clock_hold.start(max(1, math.ceil(remaining * 1000)))
++            return
++        self.clock_fired = True
++        self.switch_to_desktop()
++
 +    def mousePressEvent(self, e):
++        if e.button() != Qt.MouseButton.LeftButton:
++            return
++        if self.switching or self.power_busy:
++            return
 +        p = e.position()
-+        if self.net_open and self.switch_button_rect().contains(p):
-+            self.switch_pressed = True
-+            self.update(self.net_panel_rect().toAlignedRect().adjusted(-4, -4, 4, 4))
++        if self.net_open and self.net_panel_rect().contains(p):
++            for action in self.power_choices():
++                if self.power_button_rect(action).contains(p):
++                    self.power_pressed = action
++                    self.update()
++                    return
++            if not self.power_action and self.switch_button_rect().contains(p):
++                self.switch_pressed = True
++                self.update()
++            return  # Never click through the menu into the Launch button.
++        if self.clock_rect().contains(p):
++            self.power_action = None
++            self.power_error = ""
++            self.clock_gesture, self.clock_cancelled, self.clock_fired = True, False, False
++            self.clock_started = time.monotonic()
++            self.clock_hold.start(8000)
 +            return
 +        if self.state == RECOGNIZED and self.button_rect().contains(p):
 +            self.pressed = True
 +            self.update(self.button_rect().toAlignedRect().adjusted(-40, -40, 40, 40))
 +
 +    def mouseReleaseEvent(self, e):
++        if e.button() != Qt.MouseButton.LeftButton:
++            return
++        if self.switching or self.power_busy:
++            return
 +        p = e.position()
++        if self.power_pressed:
++            action, self.power_pressed = self.power_pressed, None
++            if self.net_open and self.power_button_rect(action).contains(p):
++                if action == "cancel":
++                    self.power_action = None
++                    self.power_error = ""
++                elif action == "confirm":
++                    self.confirm_power()
++                else:
++                    self.request_power(action)
++            self.update()
++            return
++        if self.clock_gesture:
++            self.clock_hold.stop()
++            # A late delivered release at >=8 seconds still completes the hold once.
++            if self.clock_rect().contains(p) and time.monotonic() - self.clock_started >= 8:
++                self.finish_clock_hold()
++            if (not self.clock_cancelled and not self.clock_fired
++                    and self.clock_rect().contains(p)
++                    and time.monotonic() - self.clock_started < 0.5):
++                self.net_open = not self.net_open
++                self.refresh_net()
++            self.clock_gesture = False
++            self.update()
++            return
 +        was = self.pressed
 +        self.pressed = False
 +        if self.switch_pressed:
@@ -1197,14 +1914,42 @@ index 0000000..3ed1ac6
 +            self.refresh_net()
 +        elif self.net_open and not self.net_panel_rect().contains(p):
 +            self.net_open = False
++        if not self.net_open:
++            self.power_action = None
++            self.power_error = ""
 +        self.update()
 +
++    def mouseMoveEvent(self, e):
++        if self.clock_gesture and not self.clock_rect().contains(e.position()):
++            self.cancel_clock_hold()
++        super().mouseMoveEvent(e)
++
++    def leaveEvent(self, e):
++        self.cancel_clock_hold()
++        super().leaveEvent(e)
++
++    def focusOutEvent(self, e):
++        self.cancel_clock_hold()
++        self.power_pressed = None
++        self.switch_pressed = False
++        self.pressed = False
++        super().focusOutEvent(e)
++
 +    def keyPressEvent(self, e):
++        if self.power_busy:
++            return
++        if self.power_action:
++            if e.key() == Qt.Key.Key_Escape:
++                self.power_action = None
++                self.power_error = ""
++                self.update()
++            return
 +        mods = e.modifiers()
 +        if e.key() == Qt.Key.Key_Q and mods & Qt.KeyboardModifier.ControlModifier and mods & Qt.KeyboardModifier.AltModifier:
 +            QApplication.quit()
 +        elif e.key() == Qt.Key.Key_D and mods & Qt.KeyboardModifier.ControlModifier and mods & Qt.KeyboardModifier.AltModifier:
-+            self.switch_to_desktop()
++            if not e.isAutoRepeat():
++                self.switch_to_desktop()
 +        elif e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self.state == RECOGNIZED:
 +            self.launch()
 +
@@ -1266,6 +2011,7 @@ index 0000000..3ed1ac6
 +
 +    QGuiApplication.setDesktopFileName("bitedj-launcher")      # Wayland app_id for labwc window rules
 +    app = QApplication(sys.argv)
++    app.setQuitOnLastWindowClosed(False)
 +    app.setApplicationName("Bite Launcher")
 +    w = Desktop(args, conf)
 +    sw, sh = (int(v) for v in args.size.lower().split("x"))
@@ -1287,26 +2033,268 @@ index 0000000..3ed1ac6
 +        rc = read(os.path.expanduser("~/.config/labwc/rc.xml"))
 +        kiosk_rule = 'identifier="*"' in rc and "ToggleFullscreen" in rc
 +        w.show() if kiosk_rule else w.showFullScreen()
-+        QTimer.singleShot(1500, lambda: w.isFullScreen() or w.showFullScreen())
++        QTimer.singleShot(1500, lambda: w.state == RUNNING or w.isFullScreen() or w.showFullScreen())
++    w.consume_view_request()
 +    sys.exit(app.exec())
 +
 +
 +if __name__ == "__main__":
 +    main()
+diff --git a/stage-mixxx/03-kiosk/files/configure_boot.py b/stage-mixxx/03-kiosk/files/configure_boot.py
+new file mode 100644
+index 0000000..99cec3e
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/configure_boot.py
+@@ -0,0 +1,95 @@
++#!/usr/bin/env python3
++"""Guard stock Pi desktop autostart commands before they can display a desktop."""
++import argparse
++from pathlib import Path
++import shlex
++
++LAUNCHER = "/usr/local/bin/bitedj-launcher"
++BEGIN = "# bite-launcher: begin desktop guard"
++END = "# bite-launcher: end desktop guard"
++
++
++def unguard(text):
++    lines = text.splitlines(keepends=True)
++    result = []
++    index = 0
++    while index < len(lines):
++        if lines[index].strip() != BEGIN:
++            result.append(lines[index])
++            index += 1
++            continue
++        # Our block has exactly five lines. Never discard an edited/malformed block.
++        if (index + 4 >= len(lines) or not lines[index + 1].startswith("if ")
++                or lines[index + 3].strip() != "fi"
++                or lines[index + 4].strip() != END):
++            raise ValueError("Edited Bite Launcher desktop guard; restore the backup before reinstalling")
++        result.append(lines[index + 2])
++        index += 5
++    return "".join(result)
++
++
++def desktop_command(line):
++    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
++    lexer.whitespace_split = True
++    try:
++        words = list(lexer)
++    except ValueError:
++        return False
++    if not words:
++        return False
++    if words[-1] == "&":
++        words.pop()
++    # Do not accidentally suppress another command joined on the same line.
++    if any(word in ("&", "&&", "||", ";", "|") for word in words):
++        return False
++    if words and Path(words[0]).name == "exec":
++        words.pop(0)
++    if words and Path(words[0]).name == "lwrespawn":
++        words.pop(0)
++    if not words:
++        return False
++    executable = Path(words[0]).name
++    return (executable in ("wf-panel-pi", "pcmanfm-pi")
++            or (executable == "pcmanfm" and "--desktop" in words)
++            or (executable == "swaybg" and any(x in words for x in ("-i", "--image"))))
++
++
++def guard(text, remove=False):
++    text = unguard(text)
++    if remove:
++        return text
++    condition = (f'if [ ! -x {shlex.quote(LAUNCHER)} ] || '
++                 '[ ! -e "$HOME/.config/bite-launcher/managed-boot" ] || '
++                 '[ -e "$HOME/.config/bite-launcher/autostart-off" ]; then\n')
++    result = []
++    for line in text.splitlines(keepends=True):
++        if desktop_command(line):
++            result.extend([BEGIN + "\n", condition, line.rstrip("\n") + "\n", "fi\n", END + "\n"])
++        else:
++            result.append(line)
++    return "".join(result)
++
++
++def configure_system(path, remove=False):
++    if not path.exists():
++        return
++    original = path.read_text()
++    changed = guard(original, remove=remove)
++    if changed == original:
++        return
++    backup = path.with_name(path.name + ".pre-bite-v32")
++    if not remove and not backup.exists():
++        backup.write_bytes(path.read_bytes())
++    temporary = path.with_name(path.name + ".bite-new")
++    temporary.write_text(changed)
++    temporary.chmod(path.stat().st_mode & 0o777)
++    temporary.replace(path)
++
++
++if __name__ == "__main__":
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--remove", action="store_true")
++    parser.add_argument("paths", nargs="*", type=Path, default=[Path("/etc/xdg/labwc/autostart")])
++    args = parser.parse_args()
++    for file in args.paths:
++        configure_system(file, remove=args.remove)
+diff --git a/stage-mixxx/03-kiosk/files/configure_session.py b/stage-mixxx/03-kiosk/files/configure_session.py
+new file mode 100644
+index 0000000..01559f3
+--- /dev/null
++++ b/stage-mixxx/03-kiosk/files/configure_session.py
+@@ -0,0 +1,118 @@
++#!/usr/bin/env python3
++"""Install/remove only Bite Launcher's labwc entries, preserving unrelated settings."""
++import json
++from pathlib import Path
++import sys
++import xml.etree.ElementTree as ET
++from configure_boot import guard
++
++COMMAND = "/usr/local/bin/bite-launcher-open toggle"
++BOOT = "/usr/local/bin/bite-mode boot &   # bite-launcher: managed startup"
++
++
++def local(tag):
++    return tag.split("}")[-1]
++
++
++def write(path, content):
++    path.parent.mkdir(parents=True, exist_ok=True)
++    temporary = path.with_name(path.name + ".bite-new")
++    temporary.write_text(content)
++    if path.exists():
++        temporary.chmod(path.stat().st_mode & 0o777)
++    temporary.replace(path)
++
++
++def configure(home, remove=False, system_rc=Path("/etc/xdg/labwc/rc.xml")):
++    folder = home / ".config/labwc"
++    folder.mkdir(parents=True, exist_ok=True)
++    record = home / ".config/bite-launcher/installer.json"
++    data = json.loads(record.read_text()) if record.exists() else {}
++    rc = folder / "rc.xml"
++    auto = folder / "autostart"
++    # Validate existing XML before editing either configuration file.
++    if rc.exists():
++        original = rc.read_text()
++    elif remove:
++        original = None
++    elif system_rc.exists():
++        original = system_rc.read_text()
++    else:
++        original = "<labwc_config><keyboard><default/></keyboard></labwc_config>"
++    parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
++    root = ET.fromstring(original, parser=parser) if original is not None else None
++    text = guard(auto.read_text(), remove=True) if auto.exists() else ""
++    lines = text.splitlines()
++    owned = lambda line: (
++        "# bite-launcher: managed startup" in line
++        or ("bitedj-launcher" in line and not line.lstrip().startswith("#"))
++        or ("/usr/local/bin/bite-launcher-open boot" in line)
++        or ("bite-mode boot" in line)
++    )
++    if not remove:
++        for path in (rc, auto):
++            backup = path.with_name(path.name + ".pre-bite-unified")
++            if path.exists() and not backup.exists():
++                backup.write_bytes(path.read_bytes())
++        if "removed_autostart" not in data:
++            data["removed_autostart"] = [line for line in lines if owned(line)]
++        cleaned = []
++        for line in lines:
++            if owned(line):
++                continue
++            if line.strip().startswith("/usr/local/bin/djrig-launch"):
++                line = "# bite-launcher-disabled: " + line
++            cleaned.append(line)
++        # Gate desktop clients at their source, including a user's copied autostart.
++        write(auto, guard("\n".join([BOOT] + cleaned) + "\n"))
++    else:
++        cleaned = [line.removeprefix("# bite-launcher-disabled: ") for line in lines if not owned(line)]
++        # Old launcher and macro startup entries are intentionally not restored:
++        # their executables are being uninstalled. Other user lines remain.
++        write(auto, "\n".join(cleaned) + "\n")
++
++    if root is None:
++        if remove:
++            record.unlink(missing_ok=True)
++            (record.parent / "managed-boot").unlink(missing_ok=True)
++        return
++    ns = root.tag.split("}")[0] + "}" if "}" in root.tag else ""
++    if ns:
++        ET.register_namespace("", ns[1:-1])
++    keyboards = [node for node in root if isinstance(node.tag, str) and local(node.tag) == "keyboard"]
++    keyboard = keyboards[0] if keyboards else ET.SubElement(root, ns + "keyboard")
++    is_binding = lambda node: isinstance(node.tag, str) and local(node.tag) == "keybind"
++    # Preserve any user's C-A-d binding on first install; replacement is deliberate.
++    if not remove and "old_ctrl_alt_d" not in data:
++        data["old_ctrl_alt_d"] = [
++            ET.tostring(node, encoding="unicode") for kb in keyboards for node in kb
++            if is_binding(node) and node.get("key", "").lower() == "c-a-d"
++            and not any(a.get("command") == COMMAND for a in node)
++        ]
++    for kb in keyboards or [keyboard]:
++        for node in list(kb):
++            if not is_binding(node):
++                continue
++            ours = any(a.get("command") == COMMAND for a in node)
++            if ours or (not remove and node.get("key", "").lower() == "c-a-d"):
++                kb.remove(node)
++    if remove:
++        existing = any(is_binding(node) and node.get("key", "").lower() == "c-a-d" for kb in keyboards for node in kb)
++        if not existing:
++            for old in data.get("old_ctrl_alt_d", []):
++                keyboard.append(ET.fromstring(old))
++    else:
++        bind = ET.SubElement(keyboard, ns + "keybind", {"key": "C-A-d"})
++        ET.SubElement(bind, ns + "action", {"name": "Execute", "command": COMMAND})
++    ET.indent(root)
++    write(rc, '<?xml version="1.0"?>\n' + ET.tostring(root, encoding="unicode") + "\n")
++    if not remove:
++        write(record, json.dumps(data, indent=2) + "\n")
++        (record.parent / "managed-boot").touch()
++    else:
++        record.unlink(missing_ok=True)
++        (record.parent / "managed-boot").unlink(missing_ok=True)
++
++
++if __name__ == "__main__":
++    configure(Path.home(), remove="--remove" in sys.argv)
 diff --git a/stage-mixxx/03-kiosk/files/djrig.conf b/stage-mixxx/03-kiosk/files/djrig.conf
-index e8acf5b..67b2301 100644
+index e8acf5b..9b516c3 100644
 --- a/stage-mixxx/03-kiosk/files/djrig.conf
 +++ b/stage-mixxx/03-kiosk/files/djrig.conf
-@@ -6,3 +6,12 @@ DJRIG_QPA=wayland         # wayland | xcb (try xcb if touch or GL misbehaves)
+@@ -6,3 +6,14 @@ DJRIG_QPA=wayland         # wayland | xcb (try xcb if touch or GL misbehaves)
  DJRIG_OUTPUT=HDMI-A-1     # DSI panels: DSI-1
  DJRIG_MODE=1280x800
  DJRIG_ROTATE=normal       # normal | 90 | 180 | 270
 +
 +# --- BiteDJ Launcher ---
 +#BITEDJ_APP=~/bitedj/build/mixxx          # what Launch runs (this is the default)
-+#BITEDJ_APP_ARGS=--fullScreen             # arguments for it
 +BITEDJ_LAUNCHER_AUTOLAUNCH=0      # 1 = start BiteDJ on its own once a controller is recognized
-+BITEDJ_FPS=30                     # animation frame rate (30 = light on CPU, 60 = smoothest)
++BITEDJ_FPS=30                     # default animation frame rate
 +BITEDJ_FIN_SECONDS=30             # seconds for the shark fin to cross the screen (slow, Jaws-like)
-+BITEDJ_CLOCK_FORMAT=%-I:%M %p     # 24-hour clock: %H:%M
++BITEDJ_CLOCK_FORMAT="%-I:%M %p"   # 24-hour clock: "%H:%M"
 +#BITEDJ_CONTROLLER_DIRS=/opt/bitedj/share/mixxx/controllers   # override mapping folders (colon-separated)
++
++# Image builder installs BiteDJ here, unlike the desktop source-build layout.
++BITEDJ_APP=/usr/local/bin/bitedj
+diff --git a/stage-mixxx/03-kiosk/files/rc.xml b/stage-mixxx/03-kiosk/files/rc.xml
+index a56817c..c5d9c78 100644
+--- a/stage-mixxx/03-kiosk/files/rc.xml
++++ b/stage-mixxx/03-kiosk/files/rc.xml
+@@ -1,5 +1,9 @@
+ <?xml version="1.0"?>
+ <labwc_config>
++  <keyboard>
++    <default/>
++    <keybind key="C-A-d"><action name="Execute" command="/usr/local/bin/bite-launcher-open toggle"/></keybind>
++  </keyboard>
+   <core><decoration>none</decoration></core>
+   <windowRules>
+     <windowRule identifier="*" serverDecoration="no">
