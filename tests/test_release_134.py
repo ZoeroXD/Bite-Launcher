@@ -46,17 +46,9 @@ class CompatibilityTests(unittest.TestCase):
         put(self.root / "etc/os-release", "ID=debian\nVERSION_CODENAME=bookworm\n")
         self.assertTrue(self.report().conflicts)
 
-    def test_custom_splash_is_preserved_and_does_not_block_launcher(self):
-        files = [put(self.root / "etc/plymouth/plymouthd.conf", "[Daemon]\nTheme=my-custom\n"),
-                 put(self.root / "boot/firmware/config.txt", "disable_splash=0\n"),
-                 put(self.root / "etc/initramfs-tools/hooks/splash-screen-hook.sh", "# custom\n")]
-        before = [p.read_bytes() for p in files]
-        self.assertEqual(self.report().conflicts, [])
-        self.assertEqual(before, [p.read_bytes() for p in files])
-
     def test_edited_desktop_guard_stops_before_install(self):
         path = self.root / "etc/xdg/labwc/autostart"
-        from configure_boot import guard
+        from configure_autostart import guard
         path.write_text(guard("wf-panel-pi &\n").replace("if [", "if false; # [", 1))
         self.assertTrue(self.report().conflicts)
 

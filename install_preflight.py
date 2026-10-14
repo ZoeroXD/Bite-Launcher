@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only installer checks. No splash, boot, package, or mode changes."""
+"""Read-only installer checks. No boot, package, or mode changes."""
 import argparse
 from dataclasses import dataclass, field
 import json
@@ -9,7 +9,7 @@ import shlex
 import subprocess
 import xml.etree.ElementTree as ET
 
-from configure_boot import BEGIN, END, desktop_command, guard, unguard
+from configure_autostart import BEGIN, END, desktop_command, guard, unguard
 from configure_session import COMMAND, local
 
 
@@ -197,15 +197,6 @@ def inspect(root=Path("/"), home=None, run=probe, env=None, removing=False):
         if destination.is_symlink():
             report.conflicts.append(f"{destination}: linked installation destination requires review.")
 
-    # Inventory only. A pre-existing custom splash is not a conflict with an
-    # installer that does not alter splash assets, themes, hooks, or boot files.
-    for name in ("/boot/firmware/config.txt", "/boot/firmware/cmdline.txt",
-                 "/boot/config.txt", "/boot/cmdline.txt",
-                 "/etc/plymouth/plymouthd.conf", "/etc/initramfs-tools/initramfs.conf",
-                 "/etc/initramfs-tools/hooks/splash-screen-hook.sh", "/lib/firmware/logo.tga"):
-        if system(name).exists():
-            report.notes.append(f"Preserving existing {name}")
-    report.notes.append("Launcher preflight does not modify splash, initramfs, or firmware settings.")
     return report
 
 
@@ -222,7 +213,7 @@ def main():
             print(" -", conflict)
         print("Preserve the current configuration and review these conflicts before retrying.")
         return 2
-    print("Launcher preflight passed. These checks made no splash changes.")
+    print("Launcher preflight passed. These checks made no changes.")
     return 0
 
 

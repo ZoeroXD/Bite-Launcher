@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import test_unified as base
 from test_unified import gui, rt, session, QTest, Qt
-import configure_boot as boot
+import configure_autostart as boot
 import configure_session as integration
 
 

@@ -12,7 +12,7 @@ diff --git a/stage-mixxx/03-kiosk/00-run.sh b/stage-mixxx/03-kiosk/00-run.sh
 index 1aa224a..eeb2014 100755
 --- a/stage-mixxx/03-kiosk/00-run.sh
 +++ b/stage-mixxx/03-kiosk/00-run.sh
-@@ -5,8 +5,30 @@ install -m 644 files/autostart "$H/.config/labwc/autostart"
+@@ -5,8 +5,27 @@ install -m 644 files/autostart "$H/.config/labwc/autostart"
  install -m 644 files/rc.xml "$H/.config/labwc/rc.xml"
  install -m 755 files/djrig-launch "${ROOTFS_DIR}/usr/local/bin/djrig-launch"
  install -m 755 files/djrig-display "${ROOTFS_DIR}/usr/local/bin/djrig-display"
@@ -22,12 +22,12 @@ index 1aa224a..eeb2014 100755
 +install -m 755 files/bitedj-launcher "${ROOTFS_DIR}/usr/local/bin/bitedj-launcher"
 +install -m 755 files/bite-launcher-open "${ROOTFS_DIR}/usr/local/bin/bite-launcher-open"
 +install -m 755 files/bite-mode "${ROOTFS_DIR}/usr/local/bin/bite-mode"
-+for source in bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_boot.py; do
++for source in bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_autostart.py; do
 +  install -m 755 "files/$source" "${ROOTFS_DIR}/opt/bitedj-launcher/$source"
 +done
 +# Apply the same startup integration to the image without executing its clients.
 +PYTHONPATH=files python3 -c 'from pathlib import Path; import sys; from configure_session import configure; configure(Path(sys.argv[1]), system_rc=Path(sys.argv[2]))' "$H" "${ROOTFS_DIR}/etc/xdg/labwc/rc.xml"
-+python3 files/configure_boot.py "${ROOTFS_DIR}/etc/xdg/labwc/autostart"
++python3 files/configure_autostart.py "${ROOTFS_DIR}/etc/xdg/labwc/autostart"
 +install -d "$H/bin" "$H/.config/systemd/user/default.target.wants"
 +install -m 755 files/bite-mode "$H/bin/bite-mode"
 +install -m 644 files/bitedj-hold.service "$H/.config/systemd/user/bitedj-hold.service"
@@ -40,9 +40,6 @@ index 1aa224a..eeb2014 100755
  # Start the DJ session on the local console only (SSH sessions are unaffected)
  if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then exec labwc; fi
  P
-+# Hide the rainbow boot screen (GPU firmware splash)
-+CFG="${ROOTFS_DIR}/boot/firmware/config.txt"; [ -f "$CFG" ] || CFG="${ROOTFS_DIR}/boot/config.txt"
-+grep -qE '^\s*disable_splash\s*=\s*1' "$CFG" || printf '\n# Bite Launcher: hide the rainbow boot screen\n[all]\ndisable_splash=1\n# end Bite Launcher\n' >> "$CFG"
 diff --git a/stage-mixxx/03-kiosk/files/VERSION b/stage-mixxx/03-kiosk/files/VERSION
 new file mode 100644
 index 0000000..2c451b8
@@ -2040,11 +2037,11 @@ index 0000000..9a6ff41
 +
 +if __name__ == "__main__":
 +    main()
-diff --git a/stage-mixxx/03-kiosk/files/configure_boot.py b/stage-mixxx/03-kiosk/files/configure_boot.py
+diff --git a/stage-mixxx/03-kiosk/files/configure_autostart.py b/stage-mixxx/03-kiosk/files/configure_autostart.py
 new file mode 100644
 index 0000000..99cec3e
 --- /dev/null
-+++ b/stage-mixxx/03-kiosk/files/configure_boot.py
++++ b/stage-mixxx/03-kiosk/files/configure_autostart.py
 @@ -0,0 +1,95 @@
 +#!/usr/bin/env python3
 +"""Guard stock Pi desktop autostart commands before they can display a desktop."""
@@ -2153,7 +2150,7 @@ index 0000000..01559f3
 +from pathlib import Path
 +import sys
 +import xml.etree.ElementTree as ET
-+from configure_boot import guard
++from configure_autostart import guard
 +
 +COMMAND = "/usr/local/bin/bite-launcher-open toggle"
 +BOOT = "/usr/local/bin/bite-mode boot &   # bite-launcher: managed startup"

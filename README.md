@@ -1,6 +1,6 @@
 # Bite Launcher
 
-Version **1.3.4**: the V3.2 launcher with bundled FLX4 controls, plus installer compatibility checks. The installer does not change boot splash, initramfs, or firmware settings.
+Version **1.3.4**: the V3.2 launcher with bundled FLX4 controls, plus installer compatibility checks. The installer never changes boot settings: the Pi starts up exactly like stock Raspberry Pi OS.
 
 ## Installation from Downloads
 
@@ -57,7 +57,7 @@ If saved mode is desktop, the Pi intentionally returns to the desktop. Clicking 
 bash ./install.sh --check-only
 ```
 
-This inspects compatibility without installing. The old `--keep-rainbow` flag remains accepted, but the installer never changes firmware rainbow settings.
+This inspects compatibility without installing.
 
 ## Preserved launcher behavior
 
@@ -93,7 +93,7 @@ From this release's extracted folder, run:
 bash ./uninstall.sh
 ```
 
-Uninstall checks for conflicts first and removes only the launcher's own files. Boot splash and firmware settings are left untouched. The legacy `--keep-rainbow-off` option remains accepted.
+Uninstall checks for conflicts first and removes only the launcher's own files. Boot settings are not changed.
 
 ## Verification after installation
 

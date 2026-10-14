@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
-from configure_boot import guard
+from configure_autostart import guard
 
 COMMAND = "/usr/local/bin/bite-launcher-open toggle"
 BOOT = "/usr/local/bin/bite-mode boot &   # bite-launcher: managed startup"

@@ -7,8 +7,7 @@ CHECK_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --check-only) CHECK_ONLY=1 ;;
-    --keep-rainbow) : ;; # Legacy flag: the installer never changes boot splash settings.
-    *) echo "Usage: ./install.sh [--check-only] [--keep-rainbow]"; exit 2 ;;
+    *) echo "Usage: ./install.sh [--check-only]"; exit 2 ;;
   esac
 done
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
@@ -26,9 +25,11 @@ sudo apt-get install -y --no-remove --no-install-recommends python3-pyqt6 qt6-wa
 # Wayland plugin. PyQt6 alone does not guarantee that plugin is installed.
 /usr/bin/python3 -c 'from pathlib import Path; from PyQt6.QtCore import QLibraryInfo; p=Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))/"platforms"; assert list(p.glob("libqwayland*.so")), f"Qt Wayland platform plugin missing from {p}"'
 sudo install -d -o root -g root -m 755 /opt/bitedj-launcher
-for file in bitedj_launcher.py bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_boot.py install_preflight.py; do
+for file in bitedj_launcher.py bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_autostart.py install_preflight.py; do
   sudo install -m 755 "$file" "/opt/bitedj-launcher/$file"
 done
+# Files from earlier versions that are no longer used.
+sudo rm -f /opt/bitedj-launcher/configure_boot.py /opt/bitedj-launcher/splash_manager.py /opt/bitedj-launcher/BOOT-BRANDING-STATUS
 for file in bitedj-launcher bite-launcher-open bite-mode; do
   sudo install -m 755 "$file" "/usr/local/bin/$file"
 done
@@ -51,7 +52,7 @@ install -m 644 systemd/bitedj-hold.service "$HOME/.config/systemd/user/bitedj-ho
 python3 configure_session.py
 # Pi's labwc merge session also runs system autostart: guard that source too.
 # Guards are inactive for other users and when saved mode is desktop.
-sudo /usr/bin/python3 configure_boot.py
+sudo /usr/bin/python3 configure_autostart.py
 
 sudo install -m 644 bite-launcher.desktop /usr/share/applications/bite-launcher.desktop
 DESKTOP_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || true)
@@ -68,5 +69,5 @@ sudo install -m 644 VERSION /opt/bitedj-launcher/VERSION
 # Do not live-reload a half-migrated graphical session during an update.
 echo "Installed. Reboot to use the new launcher, keyboard binding, and bundled FLX4 macros."
 echo "The existing saved mode was preserved. No separate macro installation is needed."
-echo "Boot splash and firmware settings were not changed."
+echo "Boot settings were not changed; the Pi starts up as stock Raspberry Pi OS."
 echo "If the desktop asks whether to execute the shortcut, mark it trusted once."
