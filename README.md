@@ -2,6 +2,24 @@
 
 Version **1.3.4**: the V3.2 launcher with bundled FLX4 controls, plus installer compatibility checks. The installer never changes boot settings: the Pi starts up exactly like stock Raspberry Pi OS.
 
+<p align="center"><img src="bite-launcher.png" width="96" alt="Bite Launcher icon"></p>
+
+## About
+
+Bite Launcher is a touchscreen launcher for running **[BiteDJ](https://github.com/TeamDeckshark/bitedj) by [Team Deckshark](https://github.com/TeamDeckshark)** on a Raspberry Pi with a DJ controller such as the DDJ-FLX4. It waits for a supported controller, then starts BiteDJ full screen. It also adds FLX4 hold macros, a status tray, and a switch to the Pi desktop.
+
+BiteDJ is Team Deckshark's DJ software, based on [Mixxx](https://github.com/mixxxdj/mixxx) ([bitedj.com](https://bitedj.com)). This launcher is an unofficial community tool, not part of BiteDJ, and isn't affiliated with or endorsed by Deckshark. For BiteDJ support, contact its maintainers through the [BiteDJ repository](https://github.com/TeamDeckshark/bitedj).
+
+## Screenshots
+
+| Waiting for a controller | Controller recognized |
+|---|---|
+| ![No Controller Recognized](screenshots/1-waiting.png) | ![Controller Recognized with Launch button](screenshots/2-recognized.png) |
+| **Tray: network and power** | **Power confirmation** |
+| ![Tray with network details, Switch to Pi Desktop, Shut Down, Reboot](screenshots/3-network.png) | ![Shut down confirmation](screenshots/4-power-confirmation.png) |
+
+<p align="center"><img src="screenshots/fin-preview.gif" width="480" alt="Animated Bite DJ fin"><br>The animated fin in the corner of the launcher.</p>
+
 ## Installation from Downloads
 
 Save `BiteDJ-Launcher-1.3.4.zip` in the Pi's `/home/xdj/Downloads` folder. Use the newly delivered ZIP, not an older folder or V3.2 archive. Save and close your DJ work before installation and do not switch modes while installation is running.
@@ -117,3 +135,9 @@ The optional Wayland test requires Weston in the testing environment, not on the
 ## Image-build patch
 
 The included `mixxxpi64-ng-bitedj-launcher.patch` is the preserved earlier image-build reference, not a verified 1.3.4 image-build release. Use the standalone Downloads installer above for this version.
+
+## Credits
+
+- **BiteDJ:** by [Team Deckshark](https://github.com/TeamDeckshark), in the [TeamDeckshark/bitedj](https://github.com/TeamDeckshark/bitedj) repository. BiteDJ is based on [Mixxx](https://github.com/mixxxdj/mixxx) and distributed under the GNU GPL v2.0.
+- **Icons and artwork:** the Bite DJ name and logo, and the striped bite-mark design used in the launcher icon (`bite-launcher.png`) and the animated fin, are Deckshark's branding. Credit for those designs belongs to Team Deckshark. They're used here only to match the BiteDJ look.
+- **Bite Launcher:** the launcher code, installer, and FLX4 macros are community-made by [ZoeroXD](https://github.com/ZoeroXD) for running BiteDJ on a Raspberry Pi.
