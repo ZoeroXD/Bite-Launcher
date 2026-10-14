@@ -30,8 +30,20 @@ BiteDJ is Team Deckshark's DJ software, based on [Mixxx](https://github.com/mixx
 ## Quick start
 
 1. **Set up the Pi.** Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to install **Raspberry Pi OS with desktop** (Trixie). Boot it, connect to your network, and turn on SSH if you'll install remotely.
-2. **Install BiteDJ.** Follow Team Deckshark's [BiteDJ repository](https://github.com/TeamDeckshark/bitedj). Check that BiteDJ starts on its own before going on.
-3. **Point the launcher at BiteDJ, if needed.** By default, Launch runs `~/bitedj/build/mixxx`. If your BiteDJ is somewhere else, set `BITEDJ_APP=/path/to/bitedj` in `/etc/djrig.conf` after installing (`sudo nano /etc/djrig.conf`).
+2. **Build BiteDJ on the Pi.** These are the steps used on MiniTab (Raspberry Pi 4, 4 GB). For anything official, see Team Deckshark's [BiteDJ repository](https://github.com/TeamDeckshark/bitedj).
+
+   ```bash
+   sudo apt update && sudo apt install -y git
+   git clone https://github.com/TeamDeckshark/bitedj.git ~/bitedj
+   cd ~/bitedj
+   bash tools/debian_buildenv.sh setup   # installs the build tools and libraries
+   cmake -B build -DCMAKE_BUILD_TYPE=Release
+   cmake --build build -j4
+   ls -l ~/bitedj/build/mixxx            # the finished BiteDJ program
+   ```
+
+   The build takes a long time on a Pi 4. If it stops with an out-of-memory error, rerun the last `cmake --build` line with `-j2`. Then check that BiteDJ starts on its own with `~/bitedj/build/mixxx --fullScreen` before going on.
+3. **Point the launcher at BiteDJ, if needed.** By default, Launch runs `~/bitedj/build/mixxx`, which is where step 2 puts it. If your BiteDJ is somewhere else, set `BITEDJ_APP=/path/to/bitedj` in `/etc/djrig.conf` after installing (`sudo nano /etc/djrig.conf`).
 4. **Install Bite Launcher.** Run this as your normal user, not root:
 
    ```bash
