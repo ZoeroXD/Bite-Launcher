@@ -6,7 +6,14 @@ Version **1.3.4**: the V3.2 launcher with bundled FLX4 controls, plus installer 
 
 ## About
 
-Bite Launcher is a touchscreen launcher for running **[BiteDJ](https://github.com/TeamDeckshark/bitedj) by [Team Deckshark](https://github.com/TeamDeckshark)** on a Raspberry Pi with a DJ controller such as the DDJ-FLX4. It waits for a supported controller, then starts BiteDJ full screen. It also adds FLX4 hold macros, a status tray, and a switch to the Pi desktop.
+Bite Launcher is a touchscreen launcher for running **[BiteDJ](https://github.com/TeamDeckshark/bitedj) by [Team Deckshark](https://github.com/TeamDeckshark)** on a Raspberry Pi with a DJ controller such as the DDJ-FLX4. It's built around **Raspberry Pi OS** (Trixie, with the standard Raspberry Pi Desktop).
+
+**Install BiteDJ first.** Bite Launcher doesn't install, build, or change BiteDJ. It only does two jobs:
+
+- **Detection:** it watches for a plugged-in controller that BiteDJ supports, using the controller mappings that come with your BiteDJ install.
+- **Launching:** when a supported controller is found, it shows a Launch button that starts BiteDJ full screen.
+
+It also adds FLX4 hold macros, a status tray, and a switch to the Pi desktop.
 
 BiteDJ is Team Deckshark's DJ software, based on [Mixxx](https://github.com/mixxxdj/mixxx) ([bitedj.com](https://bitedj.com)). This launcher is an unofficial community tool, not part of BiteDJ, and isn't affiliated with or endorsed by Deckshark. For BiteDJ support, contact its maintainers through the [BiteDJ repository](https://github.com/TeamDeckshark/bitedj).
 
@@ -19,6 +26,28 @@ BiteDJ is Team Deckshark's DJ software, based on [Mixxx](https://github.com/mixx
 | ![Tray with network details, Switch to Pi Desktop, Shut Down, Reboot](screenshots/3-network.png) | ![Shut down confirmation](screenshots/4-power-confirmation.png) |
 
 <p align="center"><img src="screenshots/fin-preview.gif" width="480" alt="Animated Bite DJ fin"><br>The animated fin in the corner of the launcher.</p>
+
+## Quick start
+
+1. **Set up the Pi.** Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to install **Raspberry Pi OS with desktop** (Trixie). Boot it, connect to your network, and turn on SSH if you'll install remotely.
+2. **Install BiteDJ.** Follow Team Deckshark's [BiteDJ repository](https://github.com/TeamDeckshark/bitedj). Check that BiteDJ starts on its own before going on.
+3. **Point the launcher at BiteDJ, if needed.** By default, Launch runs `~/bitedj/build/mixxx`. If your BiteDJ is somewhere else, set `BITEDJ_APP=/path/to/bitedj` in `/etc/djrig.conf` after installing (`sudo nano /etc/djrig.conf`).
+4. **Install Bite Launcher.** Run this as your normal user, not root:
+
+   ```bash
+   git clone https://github.com/ZoeroXD/Bite-Launcher.git ~/Bite-Launcher
+   cd ~/Bite-Launcher
+   bash ./install.sh --check-only   # read-only compatibility check
+   bash ./install.sh
+   ```
+
+5. **Plug in your controller and reboot** (`sudo reboot`). The launcher opens and shows `Controller Recognized`. Tap **Launch** to start BiteDJ.
+
+To see which controllers your BiteDJ install supports and what's plugged in:
+
+```bash
+python3 /opt/bitedj-launcher/bitedj_launcher.py --list-controllers
+```
 
 ## Installation from Downloads
 
