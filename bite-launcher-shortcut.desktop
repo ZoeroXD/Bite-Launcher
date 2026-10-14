@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Link
+Name=Bite Launcher
+Comment=Switch to the Bite Launcher
+Icon=/opt/bitedj-launcher/bite-launcher.png
+URL=/usr/share/applications/bite-launcher.desktop

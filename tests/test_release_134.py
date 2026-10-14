@@ -110,3 +110,32 @@ class PreservationTests(unittest.TestCase):
             self.assertTrue(runtime.OFF.exists())
             session.save_mode(False)
             self.assertFalse(runtime.OFF.exists())
+
+
+class DesktopShortcutTests(unittest.TestCase):
+    """The Pi desktop (libfm) asks "Execute / Execute in Terminal / Open" for a plain
+    .desktop file on the desktop, whatever its permissions. A Type=Link entry whose URL
+    is the absolute path of the installed menu entry under /usr/share/applications opens
+    directly, like the Pi menu's "Add to Desktop"."""
+
+    ROOT = Path(__file__).resolve().parents[1]
+
+    def entry(self, name):
+        import configparser
+        parser = configparser.ConfigParser(interpolation=None)
+        parser.optionxform = str
+        parser.read(self.ROOT / name)
+        return parser["Desktop Entry"]
+
+    def test_shortcut_links_to_installed_menu_entry(self):
+        link = self.entry("bite-launcher-shortcut.desktop")
+        self.assertEqual(link["Type"], "Link")
+        self.assertEqual(link["URL"], "/usr/share/applications/bite-launcher.desktop")
+        self.assertEqual(link["Name"], "Bite Launcher")
+        self.assertEqual(link["Icon"], self.entry("bite-launcher.desktop")["Icon"])
+
+    def test_installer_installs_link_without_execute_bit(self):
+        script = (self.ROOT / "install.sh").read_text()
+        self.assertIn("install -m 644 bite-launcher.desktop /usr/share/applications/bite-launcher.desktop", script)
+        self.assertIn('install -m 644 bite-launcher-shortcut.desktop "$DESKTOP_DIR/bite-launcher.desktop"', script)
+        self.assertNotIn("metadata::trust", script)

@@ -58,9 +58,9 @@ sudo install -m 644 bite-launcher.desktop /usr/share/applications/bite-launcher.
 DESKTOP_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || true)
 if [ -z "$DESKTOP_DIR" ] || [ "$DESKTOP_DIR" = "$HOME" ]; then DESKTOP_DIR="$HOME/Desktop"; fi
 mkdir -p "$DESKTOP_DIR"
-install -m 755 bite-launcher.desktop "$DESKTOP_DIR/bite-launcher.desktop"
-# Installation-time only. No running program ever monitors this shortcut.
-gio set "$DESKTOP_DIR/bite-launcher.desktop" metadata::trust true 2>/dev/null || true
+# A link to the menu entry, like the Pi menu's "Add to Desktop". The Pi desktop
+# opens these directly instead of asking "Execute / Execute in Terminal / Open".
+install -m 644 bite-launcher-shortcut.desktop "$DESKTOP_DIR/bite-launcher.desktop"
 
 systemctl --user daemon-reload
 systemctl --user enable --now bitedj-hold.service
@@ -70,4 +70,3 @@ sudo install -m 644 VERSION /opt/bitedj-launcher/VERSION
 echo "Installed. Reboot to use the new launcher, keyboard binding, and bundled FLX4 macros."
 echo "The existing saved mode was preserved. No separate macro installation is needed."
 echo "Boot settings were not changed; the Pi starts up as stock Raspberry Pi OS."
-echo "If the desktop asks whether to execute the shortcut, mark it trusted once."
