@@ -25,7 +25,7 @@ sudo apt-get install -y --no-remove --no-install-recommends python3-pyqt6 qt6-wa
 # Wayland plugin. PyQt6 alone does not guarantee that plugin is installed.
 /usr/bin/python3 -c 'from pathlib import Path; from PyQt6.QtCore import QLibraryInfo; p=Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))/"platforms"; assert list(p.glob("libqwayland*.so")), f"Qt Wayland platform plugin missing from {p}"'
 sudo install -d -o root -g root -m 755 /opt/bitedj-launcher
-for file in bitedj_launcher.py bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_autostart.py install_preflight.py; do
+for file in bitedj_launcher.py bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_autostart.py install_preflight.py launcher_palette.py theme_sync.py; do
   sudo install -m 755 "$file" "/opt/bitedj-launcher/$file"
 done
 # Files from earlier versions that are no longer used.
@@ -38,6 +38,9 @@ sudo touch /etc/djrig.conf
 if ! grep -q "BiteDJ Launcher" /etc/djrig.conf; then
   sudo tee -a /etc/djrig.conf < djrig-launcher.conf >/dev/null
 fi
+# Read as the installing user, so ~/bitedj refers to their BiteDJ installation.
+# Startup repeats the same detection; no stale color is cached or hardcoded.
+/usr/bin/python3 -B /opt/bitedj-launcher/theme_sync.py
 
 # Replace the old macro service instead of starting a second listener.
 systemctl --user stop bitedj-hold.service 2>/dev/null || true

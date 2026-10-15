@@ -121,7 +121,7 @@ This inspects compatibility without installing.
 ## Preserved launcher behavior
 
 - **No supported controller:** `No Controller Recognized`, the helper text `Plug in a DJ controller supported by Bite DJ.`, and no Launch button.
-- **Supported controller:** `Controller Recognized`, controller name, and the existing purple Launch button.
+- **Supported controller:** `Controller Recognized`, controller name, and a Launch button whose accent follows the local BiteDJ theme.
 - **Launch command:** `~/bitedj/build/mixxx --fullScreen`. Do not start duplicate instances.
 - **Original visual design:** unchanged fin geometry, bite marks, colors, outlines, slow movement, four-second pause, and default 30 FPS. Animation/network timers pause when BiteDJ is running and the launcher is inactive.
 - **No process-based blanking:** detecting a BiteDJ process does not hide or blank the launcher. A fresh painted/exposed-window acknowledgement remains required before suppressing an existing desktop.
@@ -146,6 +146,55 @@ Desktop exit disables autostart, stops the wrapper first, closes BiteDJ if runni
 
 The `~/.config/bite-launcher/autostart-off` marker still represents desktop mode. Standard Pi desktop autostart commands are guarded in launcher mode instead of being started and hidden afterward; failed launcher startup retains the existing desktop recovery behavior.
 
+## Dynamic BiteDJ theme
+
+The installer reads the local BiteDJ theme and reports the detected accent. Each
+new launcher process reads it again, so an updated BiteDJ theme takes effect the
+next time the launcher is fully closed and started. Merely showing an already
+running launcher does not reload its color. No background watcher, network
+request, or additional service is used.
+
+- **Source:** the inactive Play tab's visible background, normally
+  `#TabControls` in `res/skins/BiteDJ/style.qss`. Supported direct inactive
+  `TabButtonPlay` overrides take precedence; selected, pressed, and hover rules
+  are excluded.
+- **Where to find it:** the detector looks beside the configured `BITEDJ_APP`
+  executable, in source-checkout `res/skins/BiteDJ` or installed
+  `share/bitedj/skins/BiteDJ` and `share/mixxx/skins/BiteDJ` layouts.
+- **Affected controls:** Launch button background, glow, and pressed shading,
+  plus the pulsing cable accent on the controller icon. Branded fin stripes,
+  other controls, controller mappings, and boot settings are unchanged.
+- **Black exception:** when all RGB channels are at most 16, both accents use
+  the existing launcher `GRAY` (`#44403e`), shared with the fin palette.
+  Missing, unreadable, oversized, malformed, or unsupported theme definitions
+  also use this gray and report the reason rather than blocking launch.
+- **Parsing boundary:** this is a conservative parser for the relevant solid
+  QSS background rules, not a full Qt stylesheet engine. It supports hex,
+  `rgb()`/`rgba()`, black, white, gray/grey, and transparent. It reads the skin's
+  base color, not BiteDJ's runtime daylight-mode transformation.
+
+For a nonstandard installation or a different skin file, add its path to
+`/etc/djrig.conf`; the file is only read, never modified:
+
+```ini
+BITEDJ_THEME_FILE=~/bitedj/res/skins/BiteDJ/style.qss
+```
+
+Check the current detection without starting BiteDJ or changing any settings:
+
+```bash
+python3 /opt/bitedj-launcher/theme_sync.py --json
+```
+
+The output identifies the detected/effective color, file, line, and fallback
+reason. Installation and startup use the same detection function; the installer
+runs it as your normal user so `~` resolves to your own home directory.
+
+The screenshots show the theme read from BiteDJ commit `1bd4a00` (`#488ab3`);
+this value is illustrative, not a built-in default. The update passes 84
+automated tests and the headless Wayland smoke checks; physical Pi testing of
+this theme update remains pending.
+
 ## Uninstall
 
 From this release's extracted folder, run:
@@ -166,7 +215,7 @@ Uninstall checks for conflicts first and removes only the launcher's own files. 
 
 Automated tests mock power requests and system changes.
 
-Release validation: 61 automated tests passed. The headless Wayland probe passed waiting, recognized, existing-BiteDJ-process, and instance-reuse checks. Installed on a Raspberry Pi 4 running Trixie, where the FLX4 hold macros were confirmed working.
+The existing launcher and FLX4 hold macros were previously tested on a Raspberry Pi 4 running Trixie. The dynamic-theme update is tested separately; see the theme section below.
 
 ```bash
 QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v

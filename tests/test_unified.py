@@ -434,6 +434,9 @@ class GuiTests(unittest.TestCase):
             self.assertTrue(rt.view_ready("old"))
 
     def reference_frame(self, waiting):
+        # Keep pixel-level layout/fin regression coverage against the old images.
+        # Theme tests separately verify dynamic colors on the rendered controls.
+        self.w.accent = gui.QColor(gui.PURPLE)
         self.w.set_controller(None if waiting else ("Pioneer DDJ-FLX4", "Pioneer DDJ-FLX4"))
         self.w.fade = 1.0
         self.w.clock.elapsed = lambda: 12000

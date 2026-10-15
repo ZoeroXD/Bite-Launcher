@@ -5,7 +5,7 @@
 * Keeps a tiny system tray: Ethernet, Wi-Fi and the clock (tap it for network details).
 * Asks for a BiteDJ-supported controller in the centre of the screen.
 * A striped shark fin (Bite DJ logo colours) swims along the bottom edge, left->right->left.
-* When a supported controller is plugged in: "Controller Recognized" + a purple Launch button.
+* When a supported controller is plugged in: "Controller Recognized" + a theme-colored Launch button.
 
 Runs under labwc (Wayland). Requires only python3-pyqt6.
 """
@@ -26,10 +26,11 @@ from PyQt6.QtGui import (QColor, QFont, QFontMetrics, QGuiApplication, QImage, Q
                          QPainterPath, QPen, QPixmap)
 from PyQt6.QtWidgets import QApplication, QWidget
 import bite_runtime as runtime
+from launcher_palette import GRAY
+import theme_sync
 
 # --------------------------------------------------------------------------- palette (from Bite-DJ-logo.png)
 CHARCOAL = "#231f20"
-GRAY = "#44403e"
 RED = "#c8372d"
 ORANGE = "#f15a22"
 BLUE = "#27aae1"
@@ -323,6 +324,9 @@ class Desktop(QWidget):
     def __init__(self, args, conf):
         super().__init__()
         self.args, self.conf = args, conf
+        self.theme = theme_sync.detect(conf)
+        self.accent = QColor(self.theme.color)
+        print(self.theme.summary(), file=sys.stderr, flush=True)
         self.setWindowTitle("Bite Launcher")
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.setAutoFillBackground(False)
@@ -698,11 +702,13 @@ class Desktop(QWidget):
             qp.drawText(QRectF(0, cy + 0.5 * u, W, 4 * u), Qt.AlignmentFlag.AlignCenter, name)
             r = self.button_rect()
             glow = 0.5 + 0.5 * math.sin(t * 2.2)
-            for i in range(4, 0, -1):                       # soft purple glow
+            for i in range(4, 0, -1):                       # soft theme-colored glow
                 qp.setPen(Qt.PenStyle.NoPen)
-                qp.setBrush(QColor(157, 85, 226, int(14 * glow * (5 - i))))
+                color = QColor(self.accent)
+                color.setAlpha(int(14 * glow * (5 - i)))
+                qp.setBrush(color)
                 qp.drawRoundedRect(r.adjusted(-i * 0.6 * u, -i * 0.6 * u, i * 0.6 * u, i * 0.6 * u), r.height() / 2 + i, r.height() / 2 + i)
-            qp.setBrush(QColor("#7b3fc0") if self.pressed else QColor(PURPLE))
+            qp.setBrush(self.accent.darker(125) if self.pressed else self.accent)
             qp.drawRoundedRect(r, r.height() / 2, r.height() / 2)
             qp.setPen(QColor("white"))
             qp.setFont(self.font(3.4 * u, QFont.Weight.Bold, 0.5))
@@ -726,7 +732,9 @@ class Desktop(QWidget):
             qp.drawEllipse(QPointF(c.x() + dx * s, c.y()), s * 0.28, s * 0.28)
         qp.drawLine(QPointF(c.x(), c.y() - s * 0.25), QPointF(c.x(), c.y() + s * 0.25))
         a = 0.35 + 0.65 * (0.5 + 0.5 * math.sin(t * 3.0))
-        pen.setColor(QColor(157, 85, 226, int(255 * a)))
+        color = QColor(self.accent)
+        color.setAlpha(int(255 * a))
+        pen.setColor(color)
         qp.setPen(pen)
         path = QPainterPath(QPointF(c.x(), body.top()))
         path.cubicTo(c.x(), body.top() - s * 0.35, c.x() + s * 0.5, body.top() - s * 0.25, c.x() + s * 0.5, body.top() - s * 0.6)
