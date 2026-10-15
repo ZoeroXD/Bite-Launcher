@@ -195,6 +195,20 @@ class ThemeTests(unittest.TestCase):
                 self.assertTrue(any(icon.pixelColor(x, y).alpha() > 0 and
                                     icon.pixelColor(x, y).name() == window.accent.name()
                                     for x in range(95, 125) for y in range(40, 80)))
+                # Waiting dots share the accent but retain their breathing opacity.
+                dot_alpha = []
+                for time in (0, 0.5235987756):
+                    dots = QImage(1280, 800, QImage.Format.Format_ARGB32)
+                    dots.fill(0)
+                    painter = QPainter(dots)
+                    window.paint_center(painter, gui.WAITING, 1.0, time)
+                    painter.end()
+                    dot = dots.pixelColor(round(640 - 3 * window.u),
+                                          round(400 + 11 * window.u))
+                    dot_alpha.append(dot.alpha())
+                    if time:
+                        self.assertEqual(dot.name(), window.accent.name())
+                self.assertEqual(dot_alpha, [63, 255])
                 for timer in (window.anim, window.poll, window.slow, window.sec,
                               window.clock_hold, window.power_timer):
                     timer.stop()

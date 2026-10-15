@@ -6,6 +6,8 @@ cd "$(dirname "$0")"
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
 python3 -B install_preflight.py --uninstall
+# Refuse to overwrite later firmware edits; do this before removing the launcher.
+sudo /usr/bin/python3 -I -S configure_rainbow.py --restore
 # Latest specification: selecting desktop closes BiteDJ as well as the launcher.
 if [ -x /usr/local/bin/bite-mode ]; then /usr/local/bin/bite-mode desktop; fi
 systemctl --user disable --now bitedj-hold.service 2>/dev/null || true
@@ -24,4 +26,4 @@ rm -f "$HOME/.config/bite-launcher/autostart-off"
 sudo rm -rf /opt/bitedj-launcher
 sudo rm -f /usr/local/bin/bitedj-launcher /usr/local/bin/bite-launcher-open /usr/local/bin/bite-mode /usr/share/applications/bite-launcher.desktop
 echo "Removed. Reboot to reload keyboard settings. Backups and /etc/djrig.conf were retained."
-echo "Boot settings were not changed."
+echo "Any unchanged managed rainbow setting was restored; other boot settings were not changed."

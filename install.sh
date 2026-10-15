@@ -14,6 +14,7 @@ export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
 echo "Checking launcher compatibility before installation."
 python3 -B install_preflight.py
+sudo /usr/bin/python3 -I -S configure_rainbow.py --check
 if [ "$CHECK_ONLY" = 1 ]; then
   exit 0
 fi
@@ -25,7 +26,7 @@ sudo apt-get install -y --no-remove --no-install-recommends python3-pyqt6 qt6-wa
 # Wayland plugin. PyQt6 alone does not guarantee that plugin is installed.
 /usr/bin/python3 -c 'from pathlib import Path; from PyQt6.QtCore import QLibraryInfo; p=Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))/"platforms"; assert list(p.glob("libqwayland*.so")), f"Qt Wayland platform plugin missing from {p}"'
 sudo install -d -o root -g root -m 755 /opt/bitedj-launcher
-for file in bitedj_launcher.py bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_autostart.py install_preflight.py launcher_palette.py theme_sync.py; do
+for file in bitedj_launcher.py bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_autostart.py install_preflight.py configure_rainbow.py launcher_palette.py theme_sync.py; do
   sudo install -m 755 "$file" "/opt/bitedj-launcher/$file"
 done
 # Files from earlier versions that are no longer used.
@@ -67,9 +68,10 @@ install -m 644 bite-launcher-shortcut.desktop "$DESKTOP_DIR/bite-launcher.deskto
 
 systemctl --user daemon-reload
 systemctl --user enable --now bitedj-hold.service
+sudo /usr/bin/python3 -I -S /opt/bitedj-launcher/configure_rainbow.py
 # Record completion only after the installation steps above succeed.
 sudo install -m 644 VERSION /opt/bitedj-launcher/VERSION
 # Do not live-reload a half-migrated graphical session during an update.
 echo "Installed. Reboot to use the new launcher, keyboard binding, and bundled FLX4 macros."
 echo "The existing saved mode was preserved. No separate macro installation is needed."
-echo "Boot settings were not changed; the Pi starts up as stock Raspberry Pi OS."
+echo "Only the Pi firmware rainbow setting is managed; normal OS splash and initramfs are untouched."

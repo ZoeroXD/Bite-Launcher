@@ -688,7 +688,9 @@ class Desktop(QWidget):
             # three breathing dots
             for i in range(3):
                 a = 0.25 + 0.75 * max(0.0, math.sin(t * 3.0 - i * 0.7))
-                qp.setBrush(QColor(157, 85, 226, int(255 * a)))
+                color = QColor(self.accent)
+                color.setAlpha(int(255 * a))
+                qp.setBrush(color)
                 qp.setPen(Qt.PenStyle.NoPen)
                 qp.drawEllipse(QPointF(W / 2 + (i - 1) * 3 * u, cy + 11 * u), 0.7 * u, 0.7 * u)
         else:

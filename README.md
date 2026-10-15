@@ -1,6 +1,6 @@
 # Bite Launcher
 
-Version **1.3.4**: the V3.2 launcher app with bundled FLX4 controls macros, plus installer compatibility checks. The installer never changes boot settings: the Pi starts up exactly like stock Raspberry Pi OS. <Tired changing the boot sequence and Icons but failed, I left it out>
+Version **1.3.4**: the V3.2 launcher app with bundled FLX4 controls macros, plus installer compatibility checks. On Raspberry Pi, the installer hides the GPU rainbow splash only. The normal OS startup screen, Plymouth and initramfs are left unchanged; no custom boot image is installed.
 
 <p align="center"><img src="bite-launcher.png" width="96" alt="Bite Launcher icon"></p>
 
@@ -162,9 +162,10 @@ request, or additional service is used.
   executable, in source-checkout `res/skins/BiteDJ` or installed
   `share/bitedj/skins/BiteDJ` and `share/mixxx/skins/BiteDJ` layouts.
 - **Affected controls:** Launch button background, glow, and pressed shading,
-  plus the pulsing cable accent on the controller icon. Branded fin stripes,
-  other controls, controller mappings, and boot settings are unchanged.
-- **Black exception:** when all RGB channels are at most 16, both accents use
+  the three breathing dots beneath "No Controller Recognized", and only the
+  pulsing wire above the original controller icon. The gray two-platter outline,
+  center divider, branded fin stripes, and other controls are unchanged.
+- **Black exception:** when all RGB channels are at most 16, all these accents use
   the existing launcher `GRAY` (`#44403e`), shared with the fin palette.
   Missing, unreadable, oversized, malformed, or unsupported theme definitions
   also use this gray and report the reason rather than blocking launch.
@@ -191,9 +192,47 @@ reason. Installation and startup use the same detection function; the installer
 runs it as your normal user so `~` resolves to your own home directory.
 
 The screenshots show the theme read from BiteDJ commit `1bd4a00` (`#488ab3`);
-this value is illustrative, not a built-in default. The update passes 84
-automated tests and the headless Wayland smoke checks; physical Pi testing of
-this theme update remains pending.
+this value is illustrative, not a built-in default. Theme and firmware-edit tests
+run on temporary fixtures; physical Pi testing of the latest update remains pending.
+
+## Firmware rainbow only
+
+The installer sets `disable_splash=1` to hide the Raspberry Pi firmware's rainbow
+screen. This setting takes effect on reboot
+([Raspberry Pi configuration documentation](https://www.raspberrypi.com/documentation/computers/config_txt.html)).
+This is the only boot-setting change: no Plymouth changes, `cmdline.txt` edits,
+initramfs rebuilds, custom boot images, or animation delays.
+
+- **Precheck:** checks Pi hardware, a mounted boot partition, file ownership,
+  and any previous managed record before package installation. `--check-only`
+  can request sudo authentication but does not create or modify files.
+- **Existing setting:** preserves an already-effective unconditional
+  `disable_splash=1`. Otherwise it appends one marked `[all]` block at the end
+  of `/boot/firmware/config.txt` (or verified legacy `/boot/config.txt`).
+- **Backup:** saves the exact original bytes beside `config.txt` as
+  `config.txt.bite-rainbow-<unique-id>.bak` before editing. The installer prints
+  the exact path; keep it. Reinstalling does not duplicate the managed block
+  or overwrite its original backup.
+- **Failure protection:** uses an atomic replacement and attempts to restore the
+  original if writing or verification fails. No software can guarantee recovery
+  from storage failure or power loss; keep normal SD-card backups too.
+- **Restore protection:** if `config.txt` has changed since installation, it stops
+  rather than overwriting those changes. Review the backup and the current file.
+- **Other hardware:** if Raspberry Pi hardware cannot be identified, the rainbow
+  step is skipped without editing firmware files.
+
+To undo only the rainbow change while keeping the launcher:
+
+```bash
+sudo /usr/bin/python3 -I -S /opt/bitedj-launcher/configure_rainbow.py --restore
+```
+
+This restores the pre-install configuration only if the managed file is still
+unchanged, and retains the backup. If the rainbow was already disabled before
+installation, it stays that way. If recovery is needed immediately after a
+failed install and the Pi cannot start, the printed backup is on the SD card's
+boot partition: on another computer, copy that specific backup over `config.txt`.
+Do not blindly restore an old whole-file backup after later firmware edits.
 
 ## Uninstall
 
@@ -203,7 +242,10 @@ From this release's extracted folder, run:
 bash ./uninstall.sh
 ```
 
-Uninstall checks for conflicts first and removes only the launcher's own files. Boot settings are not changed.
+Uninstall first restores any unchanged rainbow edit made by this installer, then
+removes the launcher files. A pre-existing rainbow preference is preserved. If
+the managed firmware configuration has later edits, uninstall stops for review
+before removing the launcher; it does not overwrite those edits.
 
 ## Verification after installation
 
@@ -215,7 +257,7 @@ Uninstall checks for conflicts first and removes only the launcher's own files. 
 
 Automated tests mock power requests and system changes.
 
-The existing launcher and FLX4 hold macros were previously tested on a Raspberry Pi 4 running Trixie. The dynamic-theme update is tested separately; see the theme section below.
+The existing launcher and FLX4 hold macros were previously tested on a Raspberry Pi 4 running Trixie. The latest theme/dots and rainbow changes are tested separately using rendered UI checks and temporary firmware fixtures.
 
 ```bash
 QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
