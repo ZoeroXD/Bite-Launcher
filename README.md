@@ -1,6 +1,6 @@
 # Bite Launcher
 
-Version **1.3.4**: the V3.2 launcher app with bundled FLX4 controls macros, plus installer compatibility checks. On Raspberry Pi, the installer hides the GPU rainbow splash only. The normal OS startup screen, Plymouth and initramfs are left unchanged; no custom boot image is installed.
+Version **1.3.4** launcher app with bundled FLX4 control macros, plus installer compatibility checks. On Raspberry Pi, the installer hides the GPU rainbow splash only. The normal OS startup screen, Plymouth and initramfs are left unchanged; no custom boot image is installed.
 
 <p align="center"><img src="bite-launcher.png" width="96" alt="Bite Launcher icon"></p>
 
@@ -10,7 +10,7 @@ Bite Launcher is a touchscreen launcher for running **[BiteDJ](https://github.co
 
 **Install BiteDJ first.** Bite Launcher doesn't install, build, or change BiteDJ. It only does two jobs:
 
-- **Detection:** it watches for a plugged-in controller that BiteDJ supports, using the controller mappings that come with your BiteDJ install.
+- **Detection:** It watches for a plugged-in controller that BiteDJ supports, using the controller mappings that come with your BiteDJ install.
 - **Launching:** when a supported controller is found, it shows a Launch button that starts BiteDJ full screen.
 
 It also adds FLX4 hold macros, a status tray, and a switch to the Pi desktop.
