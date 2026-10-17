@@ -42,7 +42,7 @@ BiteDJ is Team Deckshark's DJ software, based on [Mixxx](https://github.com/mixx
    ls -l ~/bitedj/build/mixxx            # the finished BiteDJ program
    ```
 
-   The build takes a long time on a Pi 4. If it stops with an out-of-memory error, rerun the last `cmake --build` line with `-j2`. Then check that BiteDJ starts on its own with `~/bitedj/build/mixxx --fullScreen` before going on.
+   The build takes a long, long time on a Pi 4. All good things must wait." If it stops with an out-of-memory error, rerun the last `cmake --build` line with `-j2`. Then check that BiteDJ starts on its own with `~/bitedj/build/mixxx --fullScreen` before going on.
 3. **Point the launcher at BiteDJ, if needed.** By default, Launch runs `~/bitedj/build/mixxx`, which is where step 2 puts it. If your BiteDJ is somewhere else, set `BITEDJ_APP=/path/to/bitedj` in `/etc/djrig.conf` after installing (`sudo nano /etc/djrig.conf`).
 4. **Install Bite Launcher.** Run this as your normal user, not root:
 
