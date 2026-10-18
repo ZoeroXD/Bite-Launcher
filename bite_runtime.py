@@ -17,7 +17,16 @@ OFF = STATE / "autostart-off"
 RUN = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "bite-launcher"
 APP = str(INSTALL / "bitedj_launcher.py")
 SESSION = str(INSTALL / "bite_session.py")
+PROFILE = INSTALL / "session.json"
 VIEW_PROTOCOL = 2
+
+
+def lite_mode():
+    try:
+        value = json.loads(PROFILE.read_text())
+        return value.get("kind") == "lite" and value.get("uid") == os.getuid()
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def config():
@@ -133,6 +142,9 @@ def role(argv, name):
     script = argv[1] if len(argv) > 1 else ""
     if name == "launcher":
         return exe.startswith("python") and script == APP
+    if name == "lite-session":
+        return (exe.startswith("python") and script == str(INSTALL / "bite_lite.py")
+                and argv[2:] == ["session"])
     if name == "wrapper":
         return ((exe.startswith("python") and script == SESSION and argv[2:3] == ["wrapper"])
                 or argv[0] == "/usr/local/bin/bitedj-launcher"

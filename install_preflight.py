@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 
 from configure_autostart import BEGIN, END, desktop_command, guard, unguard
 from configure_session import COMMAND, local
+from configure_lite import detect
 
 
 @dataclass
@@ -112,20 +113,37 @@ def inspect(root=Path("/"), home=None, run=probe, env=None, removing=False):
     env = os.environ if env is None else env
     report = Report()
     system = lambda name: root / name.lstrip("/")
+    try:
+        kind = detect(root)
+    except ValueError as exc:
+        kind = "desktop"
+        if not removing:
+            report.conflicts.append(str(exc))
 
     if not removing:
         try:
             release = read_os(system("/etc/os-release"))
             family = {release.get("ID", ""), *release.get("ID_LIKE", "").split()}
             if release.get("VERSION_CODENAME") != "trixie" or not family & {"debian", "raspbian"}:
-                report.conflicts.append("This installer targets Debian/Raspberry Pi OS Trixie with Raspberry Pi Desktop.")
+                report.conflicts.append("This installer targets Trixie with Raspberry Pi Desktop or Raspberry Pi OS Lite.")
             else:
                 report.notes.append("Trixie detected; no ARM bitness is assumed.")
         except (OSError, ValueError, UnicodeError) as exc:
             report.conflicts.append(f"Cannot identify the installed OS: {exc}")
-        for name in ("labwc", "wf-panel-pi", "pcmanfm-pi"):
+        required = ("labwc", "wf-panel-pi", "pcmanfm-pi") if kind == "desktop" else ()
+        for name in required:
             if not os.access(system("/usr/bin/" + name), os.X_OK):
                 report.conflicts.append(f"Required desktop component missing: /usr/bin/{name}. Desktop will not be installed automatically.")
+        if kind == "lite":
+            if (home / ".config/bite-launcher/managed-boot").exists():
+                report.conflicts.append("Desktop integration is already installed; uninstall it before switching to Lite.")
+            model = system("/proc/device-tree/model")
+            if not model.exists():
+                model = system("/sys/firmware/devicetree/base/model")
+            if not model.exists() or b"Raspberry Pi" not in model.read_bytes():
+                report.conflicts.append("Lite automatic console startup requires verified Raspberry Pi hardware.")
+            else:
+                report.notes.append("Lite detected: install minimal labwc session, no Pi Desktop; terminal return on tty1.")
         try:
             audit = run(["dpkg", "--audit"])
             if audit.returncode or audit.stdout.strip():

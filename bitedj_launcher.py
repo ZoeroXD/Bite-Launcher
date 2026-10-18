@@ -324,6 +324,7 @@ class Desktop(QWidget):
     def __init__(self, args, conf):
         super().__init__()
         self.args, self.conf = args, conf
+        self.lite = runtime.lite_mode()
         self.theme = theme_sync.detect(conf)
         self.accent = QColor(self.theme.color)
         print(self.theme.summary(), file=sys.stderr, flush=True)
@@ -550,7 +551,7 @@ class Desktop(QWidget):
         return None
 
     def switch_to_desktop(self):
-        """Clock hold or tray button: autostart off, close BiteDJ/launcher, restore desktop.
+        """Exit to the desktop, or to the real console for a managed Lite session.
 
         Same as holding both 4 BEAT/EXIT on the FLX4. The Bite Launcher shortcut turns autostart back on,
         so the Pi boots into whichever mode was used last.
@@ -563,9 +564,9 @@ class Desktop(QWidget):
             return
         self.switching = True
         self.update()
-        # Detached: helper stops wrapper, closes BiteDJ, stops this app, restores desktop.
+        # Detached: intentional mode exit closes BiteDJ, then restores desktop/console.
         try:
-            self.mode_child = runtime.spawn([cmd, "desktop"])
+            self.mode_child = runtime.spawn([cmd, "terminal" if self.lite else "desktop"])
             QTimer.singleShot(1000, self.check_mode_switch)
         except OSError as exc:
             self.switching = False
@@ -638,7 +639,8 @@ class Desktop(QWidget):
             u = self.u
             qp.setPen(QColor(150, 145, 142))
             qp.setFont(self.font(3.0 * u, QFont.Weight.Medium))
-            qp.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Opening Pi Desktop\u2026")
+            qp.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                        "Returning to terminal\u2026" if self.lite else "Opening Pi Desktop\u2026")
             return
         self.paint_tray(qp)
         t = self.clock.elapsed() / 1000.0
@@ -818,7 +820,7 @@ class Desktop(QWidget):
 
     def net_panel_rect(self):
         u = self.u
-        w, h = 40 * u, 51 * u
+        w, h = 40 * u, (42.5 if self.lite and not self.power_action else 51) * u
         return QRectF(self.width() - w - 1.5 * u, 6.5 * u, w, h)
 
     def switch_button_rect(self):
@@ -829,7 +831,8 @@ class Desktop(QWidget):
     def power_button_rect(self, action):
         r, u = self.net_panel_rect(), self.u
         row = 0 if action in ("shutdown", "confirm") else 1
-        return QRectF(r.left() + 2.2 * u, r.top() + (29 + row * 8.5) * u,
+        offset = 20.5 if self.lite and not self.power_action else 29
+        return QRectF(r.left() + 2.2 * u, r.top() + (offset + row * 8.5) * u,
                       r.width() - 4.4 * u, 7 * u)
 
     def power_choices(self):
@@ -914,7 +917,8 @@ class Desktop(QWidget):
             qp.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
 
         if not self.power_action:
-            button(self.switch_button_rect(), "Switch to Pi Desktop", self.switch_pressed, "#787370")
+            if not self.lite:
+                button(self.switch_button_rect(), "Switch to Pi Desktop", self.switch_pressed, "#787370")
             button(self.power_button_rect("shutdown"), "Shut Down", self.power_pressed == "shutdown", "#b94c48")
             button(self.power_button_rect("reboot"), "Reboot", self.power_pressed == "reboot", PURPLE)
         else:
@@ -931,8 +935,10 @@ class Desktop(QWidget):
         qp.setPen(QColor(120, 115, 112))
         qp.setFont(self.font(1.7 * u))
         hint = self.power_error or ("Save your DJ work first." if self.power_action else
-                                   "Press “4 BEAT / EXIT” to disable launcher")
-        qp.drawText(QRectF(r.left() + 2 * u, r.top() + 45.5 * u, r.width() - 4 * u, 5 * u),
+                                   ("Hold both “4 BEAT / EXIT” for terminal" if self.lite else
+                                    "Press “4 BEAT / EXIT” to disable launcher"))
+        hint_y = 37 if self.lite and not self.power_action else 45.5
+        qp.drawText(QRectF(r.left() + 2 * u, r.top() + hint_y * u, r.width() - 4 * u, 5 * u),
                     Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, hint)
         qp.restore()
 
@@ -963,7 +969,7 @@ class Desktop(QWidget):
                     self.power_pressed = action
                     self.update()
                     return
-            if not self.power_action and self.switch_button_rect().contains(p):
+            if not self.lite and not self.power_action and self.switch_button_rect().contains(p):
                 self.switch_pressed = True
                 self.update()
             return  # Never click through the menu into the Launch button.

@@ -14,6 +14,8 @@ export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
 echo "Checking launcher compatibility before installation."
 python3 -B install_preflight.py
+SESSION_KIND=$(python3 configure_lite.py --detect)
+sudo /usr/bin/python3 -I -S configure_lite.py --check --mode "$SESSION_KIND" --user "$(id -un)"
 sudo /usr/bin/python3 -I -S configure_rainbow.py --check
 if [ "$CHECK_ONLY" = 1 ]; then
   exit 0
@@ -21,12 +23,16 @@ fi
 
 echo "Installing Bite Launcher $(cat VERSION) and bundled FLX4 controls"
 sudo apt-get update -q
-sudo apt-get install -y --no-remove --no-install-recommends python3-pyqt6 qt6-wayland swaybg alsa-utils
+PACKAGES=(python3-pyqt6 qt6-wayland swaybg alsa-utils)
+if [ "$SESSION_KIND" = lite ]; then
+  PACKAGES+=(labwc xwayland dbus-user-session polkitd kbd)
+fi
+sudo apt-get install -y --no-remove --no-install-recommends "${PACKAGES[@]}"
 # Fail before replacing installed files if the system interpreter cannot find its
 # Wayland plugin. PyQt6 alone does not guarantee that plugin is installed.
 /usr/bin/python3 -c 'from pathlib import Path; from PyQt6.QtCore import QLibraryInfo; p=Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))/"platforms"; assert list(p.glob("libqwayland*.so")), f"Qt Wayland platform plugin missing from {p}"'
 sudo install -d -o root -g root -m 755 /opt/bitedj-launcher
-for file in bitedj_launcher.py bite_runtime.py bite_session.py bitedj-hold.py configure_session.py configure_autostart.py install_preflight.py configure_rainbow.py launcher_palette.py theme_sync.py; do
+for file in bitedj_launcher.py bite_runtime.py bite_session.py bite_lite.py bitedj-hold.py configure_session.py configure_autostart.py configure_lite.py install_preflight.py configure_rainbow.py launcher_palette.py theme_sync.py; do
   sudo install -m 755 "$file" "/opt/bitedj-launcher/$file"
 done
 # Files from earlier versions that are no longer used.
@@ -53,6 +59,7 @@ done
 install -m 755 bite-mode "$HOME/bin/bite-mode"
 install -m 755 compat/bitedj-hold.py "$HOME/bin/bitedj-hold.py"
 install -m 644 systemd/bitedj-hold.service "$HOME/.config/systemd/user/bitedj-hold.service"
+if [ "$SESSION_KIND" = desktop ]; then
 python3 configure_session.py
 # Pi's labwc merge session also runs system autostart: guard that source too.
 # Guards are inactive for other users and when saved mode is desktop.
@@ -65,6 +72,10 @@ mkdir -p "$DESKTOP_DIR"
 # A link to the menu entry, like the Pi menu's "Add to Desktop". The Pi desktop
 # opens these directly instead of asking "Execute / Execute in Terminal / Open".
 install -m 644 bite-launcher-shortcut.desktop "$DESKTOP_DIR/bite-launcher.desktop"
+fi
+
+# Dedicated Lite session is enabled for the next boot, never started during install.
+sudo /usr/bin/python3 -I -S configure_lite.py --mode "$SESSION_KIND" --user "$(id -un)"
 
 systemctl --user daemon-reload
 systemctl --user enable --now bitedj-hold.service
@@ -74,4 +85,5 @@ sudo install -m 644 VERSION /opt/bitedj-launcher/VERSION
 # Do not live-reload a half-migrated graphical session during an update.
 echo "Installed. Reboot to use the new launcher, keyboard binding, and bundled FLX4 macros."
 echo "The existing saved mode was preserved. No separate macro installation is needed."
+echo "Session profile: $SESSION_KIND. Lite uses tty7 for graphics and returns to the tty1 text login console."
 echo "Only the Pi firmware rainbow setting is managed; normal OS splash and initramfs are untouched."

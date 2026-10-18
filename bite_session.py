@@ -18,7 +18,8 @@ def save_mode(desktop):
 
 
 def desktop_available():
-    return all(os.access("/usr/bin/" + x, os.X_OK) for x in ("wf-panel-pi", "pcmanfm-pi"))
+    return not rt.lite_mode() and all(os.access("/usr/bin/" + x, os.X_OK)
+                                      for x in ("wf-panel-pi", "pcmanfm-pi"))
 
 
 def stop_desktop():
@@ -73,7 +74,8 @@ def to_launcher():
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             if rt.view_ready(token):
-                stop_desktop()
+                if not rt.lite_mode():
+                    stop_desktop()
                 return
             time.sleep(0.1)
         raise RuntimeError("Launcher did not display its interface; desktop was not stopped. "
@@ -126,15 +128,35 @@ def main(argv=None):
         wrapper()
         return
     if command == "status":
-        print("launcher" if rt.matching("launcher") else "desktop")
+        print("launcher" if rt.matching("launcher") else ("terminal" if rt.lite_mode() else "desktop"))
         return
-    if command not in ("launcher", "desktop", "toggle", "boot", "start", "stop"):
-        raise RuntimeError("usage: bite-mode launcher|desktop|toggle|boot|status|start|stop")
+    if command not in ("launcher", "desktop", "terminal", "toggle", "boot", "start", "stop"):
+        raise RuntimeError("usage: bite-mode launcher|desktop|terminal|toggle|boot|status|start|stop")
+    if rt.lite_mode():
+        import bite_lite
+        if command == "desktop":
+            raise RuntimeError("Pi Desktop is unavailable in Lite mode; use bite-mode terminal")
+        # Start the system service outside the mode lock: its session client takes
+        # that same lock to present the GUI. Holding it here would deadlock startup.
+        if command in ("launcher", "boot") or (command == "toggle" and not rt.matching("launcher")):
+            if command == "boot" and rt.OFF.exists():
+                return
+            if not bite_lite.valid_session():
+                with rt.lock("mode"):
+                    save_mode(False)
+                bite_lite.start()
+                return
     with rt.lock("mode"):
         if command == "start":
             rt.start_bitedj()
         elif command == "stop":
             rt.stop("bitedj", timeout=15)
+        elif command == "terminal":
+            if not rt.lite_mode():
+                raise RuntimeError("Terminal return is only available in the managed Lite session")
+            bite_lite.to_terminal()
+        elif command == "toggle" and rt.lite_mode() and rt.matching("launcher"):
+            bite_lite.to_terminal()
         elif command == "desktop" or (command == "toggle" and rt.matching("launcher")):
             to_desktop()
         elif command == "boot" and rt.OFF.exists():

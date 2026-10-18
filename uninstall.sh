@@ -6,13 +6,21 @@ cd "$(dirname "$0")"
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
 python3 -B install_preflight.py --uninstall
+SESSION_KIND=$(python3 -c 'import bite_runtime as r; print("lite" if r.lite_mode() else "desktop")')
+sudo /usr/bin/python3 -I -S configure_lite.py --check --remove --user "$(id -un)"
+sudo /usr/bin/python3 -I -S configure_rainbow.py --check
 # Refuse to overwrite later firmware edits; do this before removing the launcher.
 sudo /usr/bin/python3 -I -S configure_rainbow.py --restore
+sudo /usr/bin/python3 -I -S configure_lite.py --remove --user "$(id -un)"
 # Latest specification: selecting desktop closes BiteDJ as well as the launcher.
-if [ -x /usr/local/bin/bite-mode ]; then /usr/local/bin/bite-mode desktop; fi
+if [ "$SESSION_KIND" = desktop ] && [ -x /usr/local/bin/bite-mode ]; then
+  /usr/local/bin/bite-mode desktop
+fi
 systemctl --user disable --now bitedj-hold.service 2>/dev/null || true
-python3 configure_session.py --remove
-sudo /usr/bin/python3 configure_autostart.py --remove
+if [ "$SESSION_KIND" = desktop ]; then
+  python3 configure_session.py --remove
+  sudo /usr/bin/python3 configure_autostart.py --remove
+fi
 if cmp -s bite-mode "$HOME/bin/bite-mode"; then rm "$HOME/bin/bite-mode"; fi
 if cmp -s compat/bitedj-hold.py "$HOME/bin/bitedj-hold.py"; then rm "$HOME/bin/bitedj-hold.py"; fi
 if cmp -s systemd/bitedj-hold.service "$HOME/.config/systemd/user/bitedj-hold.service"; then
