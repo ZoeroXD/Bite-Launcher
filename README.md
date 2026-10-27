@@ -36,7 +36,6 @@ BiteDJ is Team Deckshark's DJ software, based on [Mixxx](https://github.com/mixx
    sudo apt update && sudo apt install -y git
    git clone --branch main https://github.com/ZoeroXD/bitedj.git ~/bitedj
    OR
-   https://github.com/TeamDeckshark/bitedj
    git clone --branch main  https://github.com/TeamDeckshark/bitedj.git ~/bitedj
    cd ~/bitedj
    bash tools/debian_buildenv.sh setup   # installs the build tools and libraries
