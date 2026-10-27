@@ -30,11 +30,14 @@ BiteDJ is Team Deckshark's DJ software, based on [Mixxx](https://github.com/mixx
 ## Quick start
 
 1. **Set up the Pi.** Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to install **Raspberry Pi OS Trixie with desktop or Lite**. Boot it, connect to your network, and turn on SSH if you'll install remotely. The new Lite path still needs physical Pi acceptance testing; keep SSH access available.
-2. **Build BiteDJ on the Pi.** (Consult AI) Use [ZoeroXD's BiteDJ fork](https://github.com/ZoeroXD/bitedj) and its `main` branch for this setup.
+2. **Build BiteDJ on the Pi.** (Consult AI) Use [ZoeroXD's BiteDJ fork](https://github.com/ZoeroXD/bitedj) or https://github.com/TeamDeckshark/bitedj and its `main` branch for this setup.
 
    ```bash
    sudo apt update && sudo apt install -y git
    git clone --branch main https://github.com/ZoeroXD/bitedj.git ~/bitedj
+   OR
+   https://github.com/TeamDeckshark/bitedj
+   git clone --branch main  https://github.com/TeamDeckshark/bitedj.git ~/bitedj
    cd ~/bitedj
    bash tools/debian_buildenv.sh setup   # installs the build tools and libraries
    cmake -B build -DCMAKE_BUILD_TYPE=Release
